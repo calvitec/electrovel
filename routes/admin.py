@@ -55,6 +55,7 @@ def admin_dashboard():
         customer_list = {}
         pos_count = 0
         web_count = 0
+        
         for order in orders:
             customer = order.get('customer', {})
             if isinstance(customer, str):
@@ -66,15 +67,23 @@ def admin_dashboard():
                 customer = customer[0] if customer else {}
             if not isinstance(customer, dict):
                 customer = {}
+                
             source = order.get('source', 'web')
             if source == 'pos':
                 pos_count += 1
             else:
                 web_count += 1
+                
             name = customer.get('name', 'Unknown') if isinstance(customer, dict) else 'Unknown'
             if name and name != 'Unknown':
                 if name not in customer_list:
-                    customer_list[name] = {'name': name, 'email': customer.get('email', ''), 'phone': customer.get('phone', ''), 'orders': 0, 'total_spent': 0}
+                    customer_list[name] = {
+                        'name': name, 
+                        'email': customer.get('email', ''), 
+                        'phone': customer.get('phone', ''), 
+                        'orders': 0, 
+                        'total_spent': 0
+                    }
                 customer_list[name]['orders'] += 1
                 customer_list[name]['total_spent'] += order.get('total', 0)
 
@@ -98,6 +107,7 @@ def admin_dashboard():
         }
 
         return render_template('admin.html', products=products, bundles=bundles, orders=orders, customers=customers, stats=stats, pos_count=pos_count, analytics=analytics, DB_CONNECTED=True)
+        
     except Exception as exc:
         print(f'Admin dashboard error: {exc}')
         traceback.print_exc()
@@ -125,42 +135,54 @@ def admin_pos():
         flash('Please login first', 'danger')
         return redirect(url_for('admin.admin_login'))
 
-    products = load_products()
-    for product in products:
-        if 'price' not in product or product['price'] is None:
-            product['price'] = 0
-        if 'stock' not in product or product['stock'] is None:
-            product['stock'] = 0
-        if 'image' not in product:
-            product['image'] = ''
-        if 'name' not in product:
-            product['name'] = 'Product'
-        if 'id' not in product:
-            product['id'] = str(uuid.uuid4())
+    try:
+        products = load_products()
+        for product in products:
+            if 'price' not in product or product['price'] is None:
+                product['price'] = 0
+            if 'stock' not in product or product['stock'] is None:
+                product['stock'] = 0
+            if 'image' not in product:
+                product['image'] = ''
+            if 'name' not in product:
+                product['name'] = 'Product'
+            if 'id' not in product:
+                product['id'] = str(uuid.uuid4())
 
-    customer_list = {}
-    orders = load_orders()
-    for order in orders:
-        customer = order.get('customer', {})
-        if isinstance(customer, str):
-            try:
-                customer = __import__('json').loads(customer)
-            except Exception:
+        customer_list = {}
+        orders = load_orders()
+        for order in orders:
+            customer = order.get('customer', {})
+            if isinstance(customer, str):
+                try:
+                    customer = __import__('json').loads(customer)
+                except Exception:
+                    customer = {}
+            if isinstance(customer, list):
+                customer = customer[0] if customer else {}
+            if not isinstance(customer, dict):
                 customer = {}
-        if isinstance(customer, list):
-            customer = customer[0] if customer else {}
-        if not isinstance(customer, dict):
-            customer = {}
-        name = customer.get('name', 'Unknown') if isinstance(customer, dict) else 'Unknown'
-        if name and name != 'Unknown':
-            if name not in customer_list:
-                customer_list[name] = {'name': name, 'email': customer.get('email', ''), 'phone': customer.get('phone', ''), 'orders': 0, 'total_spent': 0}
-            customer_list[name]['orders'] += 1
-            customer_list[name]['total_spent'] += order.get('total', 0)
+            name = customer.get('name', 'Unknown') if isinstance(customer, dict) else 'Unknown'
+            if name and name != 'Unknown':
+                if name not in customer_list:
+                    customer_list[name] = {
+                        'name': name, 
+                        'email': customer.get('email', ''), 
+                        'phone': customer.get('phone', ''), 
+                        'orders': 0, 
+                        'total_spent': 0
+                    }
+                customer_list[name]['orders'] += 1
+                customer_list[name]['total_spent'] += order.get('total', 0)
 
-    customers = list(customer_list.values())
-    customers.sort(key=lambda x: x['orders'], reverse=True)
-    return render_template('pos.html', products=products, customers=customers, DB_CONNECTED=True)
+        customers = list(customer_list.values())
+        customers.sort(key=lambda x: x['orders'], reverse=True)
+        return render_template('pos.html', products=products, customers=customers, DB_CONNECTED=True)
+        
+    except Exception as e:
+        print(f"POS error: {e}")
+        flash('Error loading POS', 'danger')
+        return render_template('pos.html', products=[], customers=[], DB_CONNECTED=False)
 
 
 @admin_bp.route('/admin/pos/place-order', methods=['POST'])
@@ -186,19 +208,15 @@ def admin_pos_place_order():
             quantity = item.get('quantity', 1)
             price = item.get('price', 0)
             
-            # Calculate subtotal from items
             calculated_subtotal += price * quantity
             
-            # Get product details for cost price
             product = product_lookup.get(product_id)
             cost_price = product.get('cost_price', 0) if product else 0
             
-            # Add cost price to item for profit calculation
             item_with_cost = item.copy()
             item_with_cost['cost_price'] = cost_price
             items_with_cost.append(item_with_cost)
             
-            # Update stock
             if product:
                 current_stock = product.get('stock', 0)
                 if current_stock < quantity:
@@ -209,14 +227,13 @@ def admin_pos_place_order():
                 new_stock = max(0, current_stock - quantity)
                 update_product_stock(product_id, new_stock)
 
-        # Use calculated values
         subtotal = calculated_subtotal if calculated_subtotal > 0 else data.get('subtotal', 0)
         shipping = data.get('shipping', 0)
         total = subtotal + shipping
 
         order_data = {
             'order_id': order_id,
-            'items': items_with_cost,  # Store items with cost price
+            'items': items_with_cost,
             'subtotal': subtotal,
             'shipping': shipping,
             'total': total,
@@ -231,44 +248,35 @@ def admin_pos_place_order():
             },
         }
 
-        # Save order to database
         save_result = save_order_to_supabase(order_data)
         
         if save_result.get('success'):
-            # Reload all orders to get fresh analytics
             all_orders = load_orders()
             
-            # Calculate analytics manually for accurate results
-            total_revenue = sum(order.get('total', 0) for order in all_orders)
+            total_revenue = sum(float(order.get('total', 0) or 0) for order in all_orders)
             
-            # Calculate total profit
             total_profit = 0
             total_items_sold = 0
             pos_orders_count = 0
             web_orders_count = 0
             
             for order in all_orders:
-                # Count order sources
                 if order.get('source') == 'pos':
                     pos_orders_count += 1
                 else:
                     web_orders_count += 1
                 
-                # Calculate items sold and profit
                 for item in order.get('items', []):
                     quantity = item.get('quantity', 1)
                     total_items_sold += quantity
                     
-                    # Calculate profit if cost price is available
                     price = item.get('price', 0)
                     cost_price = item.get('cost_price', 0)
                     if cost_price > 0:
                         total_profit += (price - cost_price) * quantity
                     elif price > 0:
-                        # If no cost price, assume 30% profit margin
                         total_profit += price * quantity * 0.3
             
-            # Create analytics object with accurate data
             analytics = {
                 'total_revenue': total_revenue,
                 'total_profit': total_profit,
@@ -308,211 +316,187 @@ def admin_pos_place_order():
         return jsonify({'success': False, 'message': str(exc)}), 500
 
 
-@admin_bp.route('/admin/api/analytics')
-def admin_api_analytics():
-    if not session.get('admin_logged_in'):
-        return jsonify({'error': 'Unauthorized'}), 401
-    
-    # Force refresh analytics
-    orders = load_orders()
-    analytics = calculate_analytics_from_orders(orders)
-    return jsonify(analytics)
-
-
 @admin_bp.route('/admin/api/revenue')
 def admin_api_revenue():
     if not session.get('admin_logged_in'):
         return jsonify({'error': 'Unauthorized'}), 401
     
     try:
-        print("🔍 Fetching revenue data...")
-
-        # Use load_orders() - the shared source that includes queued orders
         orders = load_orders()
-
-        print(f"📊 Revenue API: Found {len(orders)} orders")
-
-        if not orders:
-            return jsonify({
-                "total_revenue": 0,
-                "total_orders": 0,
-                "today_revenue": 0,
-                "today_orders": 0,
-                "yesterday_revenue": 0,
-                "month_revenue": 0,
-                "month_orders": 0,
-                "last_month_revenue": 0,
-                "today_growth_pct": 0,
-                "month_growth_pct": 0,
-                "total_profit": 0,
-                "total_items_sold": 0
-            })
-
-        now = datetime.utcnow()
-        today = now.date()
-        first_day_this_month = today.replace(day=1)
-        last_day_last_month = first_day_this_month - timedelta(days=1)
-        first_day_last_month = last_day_last_month.replace(day=1)
-
-        total_revenue = 0
-        total_profit = 0
-        total_items_sold = 0
-        today_revenue = 0
-        today_orders = 0
-        yesterday_revenue = 0
-        month_revenue = 0
-        month_orders = 0
-        last_month_revenue = 0
-
-        for order in orders:
-            total = order.get('total', 0)
-            if isinstance(total, str):
-                try:
-                    total = float(total.replace(',', ''))
-                except:
-                    total = 0
-            total = float(total or 0)
-            
-            if total == 0:
-                continue
-
-            total_revenue += total
-
-            # Calculate profit
-            for item in order.get('items', []):
-                quantity = item.get('quantity', 1)
-                total_items_sold += quantity
-                
-                price = item.get('price', 0)
-                cost_price = item.get('cost_price', 0)
-                if cost_price > 0:
-                    total_profit += (price - cost_price) * quantity
-                elif price > 0:
-                    total_profit += price * quantity * 0.3
-
-            created_at = order.get('created_at', '')
-            if not created_at:
-                continue
-
-            try:
-                if isinstance(created_at, datetime):
-                    order_date = created_at.date()
-                elif isinstance(created_at, str):
-                    if ' ' in created_at and '.' in created_at:
-                        order_date = datetime.strptime(created_at, '%Y-%m-%d %H:%M:%S.%f').date()
-                    elif ' ' in created_at:
-                        order_date = datetime.strptime(created_at, '%Y-%m-%d %H:%M:%S').date()
-                    elif 'T' in created_at:
-                        clean = created_at.replace('Z', '').replace('+00:00', '')
-                        order_date = datetime.fromisoformat(clean).date() if '.' in clean else datetime.strptime(clean, '%Y-%m-%dT%H:%M:%S').date()
-                    else:
-                        order_date = datetime.strptime(created_at, '%Y-%m-%d').date()
-                else:
-                    continue
-            except Exception as e:
-                print(f"⚠️ Date parse error for '{created_at}': {e}")
-                continue
-
-            if order_date == today:
-                today_revenue += total
-                today_orders += 1
-            if order_date == today - timedelta(days=1):
-                yesterday_revenue += total
-            if order_date >= first_day_this_month:
-                month_revenue += total
-                month_orders += 1
-            if first_day_last_month <= order_date <= last_day_last_month:
-                last_month_revenue += total
-
-        today_growth = round(((today_revenue - yesterday_revenue) / yesterday_revenue) * 100, 1) if yesterday_revenue > 0 else (100.0 if today_revenue > 0 else 0)
-        month_growth = round(((month_revenue - last_month_revenue) / last_month_revenue) * 100, 1) if last_month_revenue > 0 else (100.0 if month_revenue > 0 else 0)
-
-        print(f"📊 Revenue: Total={total_revenue}, Today={today_revenue}, Month={month_revenue}")
-
+        
+        total_revenue = sum(float(order.get('total', 0) or 0) for order in orders)
+        
         return jsonify({
-            "total_revenue": total_revenue,
-            "total_profit": total_profit,
-            "total_orders": len(orders),
-            "total_items_sold": total_items_sold,
-            "today_revenue": today_revenue,
-            "today_orders": today_orders,
-            "yesterday_revenue": yesterday_revenue,
-            "month_revenue": month_revenue,
-            "month_orders": month_orders,
-            "last_month_revenue": last_month_revenue,
-            "today_growth_pct": today_growth,
-            "month_growth_pct": month_growth,
+            'total_revenue': total_revenue,
+            'total_orders': len(orders),
+            'total_profit': total_revenue * 0.3,
+            'total_items_sold': 0,
+            'today_revenue': 0,
+            'today_orders': 0,
+            'yesterday_revenue': 0,
+            'month_revenue': 0,
+            'month_orders': 0,
+            'last_month_revenue': 0,
+            'today_growth_pct': 0,
+            'month_growth_pct': 0
         })
 
     except Exception as exc:
-        print(f'❌ Revenue API error: {exc}')
-        traceback.print_exc()
         return jsonify({"error": str(exc)}), 500
 
 
-def calculate_analytics_from_orders(orders):
-    """Helper function to calculate analytics from orders"""
-    if not orders:
-        return {
-            'total_revenue': 0,
-            'total_profit': 0,
-            'total_orders': 0,
-            'total_items_sold': 0,
-            'pos_orders_count': 0,
-            'web_orders_count': 0,
-            'product_sales': {},
-            'category_sales': {}
-        }
+@admin_bp.route('/admin/api/analytics')
+def admin_api_analytics():
+    if not session.get('admin_logged_in'):
+        return jsonify({'error': 'Unauthorized'}), 401
     
-    total_revenue = sum(order.get('total', 0) for order in orders)
-    total_profit = 0
-    total_items_sold = 0
-    pos_orders_count = 0
-    web_orders_count = 0
-    product_sales = {}
-    category_sales = {}
+    try:
+        analytics = get_sales_analytics()
+        return jsonify(analytics)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ===== DEBUG ROUTES =====
+
+@admin_bp.route('/admin/test', methods=['GET'])
+def admin_test():
+    if not session.get('admin_logged_in'):
+        return jsonify({'error': 'Unauthorized'}), 401
     
-    for order in orders:
-        # Count order sources
-        if order.get('source') == 'pos':
-            pos_orders_count += 1
-        else:
-            web_orders_count += 1
+    try:
+        orders = load_orders()
+        total_revenue = sum(float(o.get('total', 0) or 0) for o in orders)
         
-        # Process items
-        for item in order.get('items', []):
-            quantity = item.get('quantity', 1)
-            total_items_sold += quantity
-            
-            # Track product sales
-            product_id = item.get('product_id') or item.get('id')
-            if product_id:
-                product_sales[product_id] = product_sales.get(product_id, 0) + quantity
-            
-            # Track category sales if available
-            category = item.get('category')
-            if category:
-                category_sales[category] = category_sales.get(category, 0) + quantity
-            
-            # Calculate profit
-            price = item.get('price', 0)
-            cost_price = item.get('cost_price', 0)
-            if cost_price > 0:
-                total_profit += (price - cost_price) * quantity
-            elif price > 0:
-                # If no cost price, assume 30% profit margin
-                total_profit += price * quantity * 0.3
+        return jsonify({
+            'success': True,
+            'total_orders': len(orders),
+            'total_revenue': total_revenue,
+            'orders': [
+                {
+                    'order_id': o.get('order_id'),
+                    'total': o.get('total'),
+                    'source': o.get('source'),
+                    'created_at': o.get('created_at')
+                }
+                for o in orders[:5]
+            ]
+        })
+    except Exception as e:
+        return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
+
+
+@admin_bp.route('/admin/debug-full', methods=['GET'])
+def debug_full():
+    if not session.get('admin_logged_in'):
+        return jsonify({'error': 'Unauthorized'}), 401
     
-    return {
-        'total_revenue': total_revenue,
-        'total_profit': total_profit,
-        'total_orders': len(orders),
-        'total_items_sold': total_items_sold,
-        'pos_orders_count': pos_orders_count,
-        'web_orders_count': web_orders_count,
-        'product_sales': product_sales,
-        'category_sales': category_sales
+    results = {}
+    
+    # 1. Check what key is being used
+    results['config'] = {
+        'supabase_url': Config.SUPABASE_URL,
+        'key_prefix': Config.SUPABASE_KEY[:20] + '...' if Config.SUPABASE_KEY else 'Not set',
+        'is_publishable': Config.SUPABASE_KEY.startswith('sb_publishable') if Config.SUPABASE_KEY else False,
+        'is_secret': Config.SUPABASE_KEY.startswith('sb_secret') if Config.SUPABASE_KEY else False,
+        'is_service_role': Config.SUPABASE_KEY.startswith('eyJ') if Config.SUPABASE_KEY else False,
+        'from_env': bool(os.environ.get('SUPABASE_KEY')),
+        'env_value': os.environ.get('SUPABASE_KEY', 'Not set')[:20] + '...' if os.environ.get('SUPABASE_KEY') else 'Not set'
     }
+    
+    # 2. Test Supabase connection
+    try:
+        response = requests.get(
+            f"{Config.SUPABASE_URL}/rest/v1/",
+            headers=Config.SUPABASE_HEADERS,
+            timeout=5
+        )
+        results['connection'] = {
+            'status': response.status_code,
+            'ok': response.status_code == 200
+        }
+    except Exception as e:
+        results['connection'] = {'error': str(e)}
+    
+    # 3. Try to read orders
+    try:
+        response = requests.get(
+            f"{Config.SUPABASE_URL}/rest/v1/orders?limit=3",
+            headers=Config.SUPABASE_HEADERS,
+            timeout=10
+        )
+        if response.status_code == 200:
+            data = response.json()
+            results['read_orders'] = {
+                'status': response.status_code,
+                'count': len(data),
+                'sample': data[:2]
+            }
+        else:
+            results['read_orders'] = {
+                'status': response.status_code,
+                'error': response.text[:200]
+            }
+    except Exception as e:
+        results['read_orders'] = {'error': str(e)}
+    
+    # 4. Try to write a test order
+    test_id = f'TEST-{uuid.uuid4().hex[:8]}'
+    test_order = {
+        'order_id': test_id,
+        'items': [{'name': 'Test Product', 'price': 100, 'quantity': 1}],
+        'subtotal': 100,
+        'shipping': 0,
+        'total': 100,
+        'status': 'test',
+        'source': 'test',
+        'created_at': datetime.utcnow().isoformat(),
+        'customer': {'name': 'Test Customer'}
+    }
+    
+    try:
+        response = requests.post(
+            f"{Config.SUPABASE_URL}/rest/v1/orders",
+            headers=Config.SUPABASE_HEADERS,
+            json=test_order,
+            timeout=10
+        )
+        results['write_test'] = {
+            'status': response.status_code,
+            'success': response.status_code in [200, 201, 204],
+            'response': response.text[:200] if response.text else 'No response'
+        }
+        
+        # Clean up
+        if response.status_code in [200, 201, 204]:
+            requests.delete(
+                f"{Config.SUPABASE_URL}/rest/v1/orders?order_id=eq.{test_id}",
+                headers=Config.SUPABASE_HEADERS,
+                timeout=5
+            )
+            results['cleanup'] = 'Test order deleted'
+    except Exception as e:
+        results['write_test'] = {'error': str(e)}
+    
+    # 5. Check what load_orders() returns
+    try:
+        orders = load_orders()
+        results['load_orders'] = {
+            'count': len(orders),
+            'revenue': sum(float(o.get('total', 0) or 0) for o in orders),
+            'sample': [
+                {
+                    'order_id': o.get('order_id'),
+                    'total': o.get('total'),
+                    'source': o.get('source')
+                }
+                for o in orders[:3]
+            ]
+        }
+    except Exception as e:
+        results['load_orders'] = {'error': str(e)}
+    
+    return jsonify(results)
 
 
 @admin_bp.route('/admin/upload-image', methods=['POST'])
