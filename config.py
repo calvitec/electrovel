@@ -1,7 +1,6 @@
 import os
 from datetime import timedelta
 
-
 class Config:
     SECRET_KEY = 'allison-electronics-secret-2026'
     PERMANENT_SESSION_LIFETIME = timedelta(days=7)
@@ -19,6 +18,7 @@ class Config:
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
     MAX_CONTENT_LENGTH = 5 * 1024 * 1024
 
+    # Supabase Configuration
     SUPABASE_URL = os.environ.get('SUPABASE_URL', 'https://hzqrdwerkgfmfaufabjr.supabase.co')
     SUPABASE_KEY = os.environ.get('SUPABASE_KEY', 'sb_secret_8Jk_nZzU7_cEBspHtHV0Ew_KTxfnQ65')
     
