@@ -1,7 +1,7 @@
 import os
 import traceback
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import requests
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, session, url_for
@@ -177,23 +177,49 @@ def admin_pos_place_order():
         products = load_products()
         product_lookup = {str(p.get('id')): p for p in products}
 
-        for item in data.get('items', []):
+        items = data.get('items', [])
+        calculated_subtotal = 0
+        items_with_cost = []
+
+        for item in items:
             product_id = str(item.get('product_id'))
             quantity = item.get('quantity', 1)
+            price = item.get('price', 0)
+            
+            # Calculate subtotal from items
+            calculated_subtotal += price * quantity
+            
+            # Get product details for cost price
             product = product_lookup.get(product_id)
+            cost_price = product.get('cost_price', 0) if product else 0
+            
+            # Add cost price to item for profit calculation
+            item_with_cost = item.copy()
+            item_with_cost['cost_price'] = cost_price
+            items_with_cost.append(item_with_cost)
+            
+            # Update stock
             if product:
                 current_stock = product.get('stock', 0)
                 if current_stock < quantity:
-                    return jsonify({'success': False, 'message': f'Not enough stock for {product.get("name")}. Available: {current_stock}'}), 400
+                    return jsonify({
+                        'success': False, 
+                        'message': f'Not enough stock for {product.get("name")}. Available: {current_stock}'
+                    }), 400
                 new_stock = max(0, current_stock - quantity)
                 update_product_stock(product_id, new_stock)
 
+        # Use calculated values
+        subtotal = calculated_subtotal if calculated_subtotal > 0 else data.get('subtotal', 0)
+        shipping = data.get('shipping', 0)
+        total = subtotal + shipping
+
         order_data = {
             'order_id': order_id,
-            'items': data.get('items', []),
-            'subtotal': data.get('subtotal', 0),
-            'shipping': data.get('shipping', 0),
-            'total': data.get('total', 0),
+            'items': items_with_cost,  # Store items with cost price
+            'subtotal': subtotal,
+            'shipping': shipping,
+            'total': total,
             'status': 'confirmed',
             'source': 'pos',
             'created_at': datetime.utcnow().isoformat(),
@@ -205,18 +231,81 @@ def admin_pos_place_order():
             },
         }
 
+        # Save order to database
         save_result = save_order_to_supabase(order_data)
+        
         if save_result.get('success'):
-            analytics = get_sales_analytics()
-            return jsonify({'success': True, 'order_id': order_id, 'message': save_result.get('message', 'Order placed successfully!'), 'analytics': analytics, 'stats': {
-                'total_revenue': analytics.get('total_revenue', 0),
-                'total_profit': analytics.get('total_profit', 0),
-                'total_orders': analytics.get('total_orders', 0),
-                'total_items_sold': analytics.get('total_items_sold', 0),
-                'pos_orders_count': analytics.get('pos_orders_count', 0),
-                'web_orders_count': analytics.get('web_orders_count', 0),
-            }, 'queued': save_result.get('queued', False), 'synced': save_result.get('synced', False)})
-        return jsonify({'success': False, 'message': save_result.get('message', 'Failed to save order')}), 500
+            # ===== CRITICAL: Force reload orders from Supabase =====
+            all_orders = load_orders()
+            
+            # Calculate analytics manually for accurate results
+            total_revenue = sum(float(order.get('total', 0) or 0) for order in all_orders)
+            
+            # Calculate total profit
+            total_profit = 0
+            total_items_sold = 0
+            pos_orders_count = 0
+            web_orders_count = 0
+            
+            for order in all_orders:
+                # Count order sources
+                if order.get('source') == 'pos':
+                    pos_orders_count += 1
+                else:
+                    web_orders_count += 1
+                
+                # Calculate items sold and profit
+                for item in order.get('items', []):
+                    quantity = item.get('quantity', 1)
+                    total_items_sold += quantity
+                    
+                    # Calculate profit if cost price is available
+                    price = item.get('price', 0)
+                    cost_price = item.get('cost_price', 0)
+                    if cost_price > 0:
+                        total_profit += (price - cost_price) * quantity
+                    elif price > 0:
+                        # If no cost price, assume 30% profit margin
+                        total_profit += price * quantity * 0.3
+            
+            # Create analytics object with accurate data
+            analytics = {
+                'total_revenue': total_revenue,
+                'total_profit': total_profit,
+                'total_orders': len(all_orders),
+                'total_items_sold': total_items_sold,
+                'pos_orders_count': pos_orders_count,
+                'web_orders_count': web_orders_count,
+                'product_sales': {},
+                'category_sales': {}
+            }
+            
+            print(f"✅ Order placed: {order_id}")
+            print(f"📊 Total revenue: {total_revenue}")
+            print(f"📊 Total orders: {len(all_orders)}")
+            
+            return jsonify({
+                'success': True, 
+                'order_id': order_id, 
+                'message': 'Order placed successfully!', 
+                'analytics': analytics, 
+                'stats': {
+                    'total_revenue': total_revenue,
+                    'total_profit': total_profit,
+                    'total_orders': len(all_orders),
+                    'total_items_sold': total_items_sold,
+                    'pos_orders_count': pos_orders_count,
+                    'web_orders_count': web_orders_count,
+                }, 
+                'queued': save_result.get('queued', False), 
+                'synced': save_result.get('synced', False)
+            })
+        else:
+            return jsonify({
+                'success': False, 
+                'message': save_result.get('message', 'Failed to save order')
+            }), 500
+            
     except Exception as exc:
         print(f'POS Order error: {exc}')
         traceback.print_exc()
@@ -227,15 +316,336 @@ def admin_pos_place_order():
 def admin_api_analytics():
     if not session.get('admin_logged_in'):
         return jsonify({'error': 'Unauthorized'}), 401
-    return jsonify(get_sales_analytics())
+    
+    # Force refresh analytics
+    orders = load_orders()
+    analytics = calculate_analytics_from_orders(orders)
+    return jsonify(analytics)
 
 
 @admin_bp.route('/admin/api/revenue')
 def admin_api_revenue():
     if not session.get('admin_logged_in'):
         return jsonify({'error': 'Unauthorized'}), 401
-    analytics = get_sales_analytics()
-    return jsonify({'total_revenue': analytics.get('total_revenue', 0), 'total_profit': analytics.get('total_profit', 0), 'total_orders': analytics.get('total_orders', 0), 'total_items_sold': analytics.get('total_items_sold', 0)})
+    
+    try:
+        print("🔍 Fetching revenue data...")
+
+        # Use load_orders() - the shared source that includes queued orders
+        orders = load_orders()
+
+        print(f"📊 Revenue API: Found {len(orders)} orders")
+
+        if not orders:
+            return jsonify({
+                "total_revenue": 0,
+                "total_orders": 0,
+                "today_revenue": 0,
+                "today_orders": 0,
+                "yesterday_revenue": 0,
+                "month_revenue": 0,
+                "month_orders": 0,
+                "last_month_revenue": 0,
+                "today_growth_pct": 0,
+                "month_growth_pct": 0,
+                "total_profit": 0,
+                "total_items_sold": 0
+            })
+
+        now = datetime.utcnow()
+        today = now.date()
+        first_day_this_month = today.replace(day=1)
+        last_day_last_month = first_day_this_month - timedelta(days=1)
+        first_day_last_month = last_day_last_month.replace(day=1)
+
+        total_revenue = 0
+        total_profit = 0
+        total_items_sold = 0
+        today_revenue = 0
+        today_orders = 0
+        yesterday_revenue = 0
+        month_revenue = 0
+        month_orders = 0
+        last_month_revenue = 0
+
+        for order in orders:
+            total = order.get('total', 0)
+            if isinstance(total, str):
+                try:
+                    total = float(total.replace(',', ''))
+                except:
+                    total = 0
+            total = float(total or 0)
+            
+            if total == 0:
+                continue
+
+            total_revenue += total
+
+            # Calculate profit
+            for item in order.get('items', []):
+                quantity = item.get('quantity', 1)
+                total_items_sold += quantity
+                
+                price = item.get('price', 0)
+                cost_price = item.get('cost_price', 0)
+                if cost_price > 0:
+                    total_profit += (price - cost_price) * quantity
+                elif price > 0:
+                    total_profit += price * quantity * 0.3
+
+            created_at = order.get('created_at', '')
+            if not created_at:
+                continue
+
+            try:
+                if isinstance(created_at, datetime):
+                    order_date = created_at.date()
+                elif isinstance(created_at, str):
+                    if ' ' in created_at and '.' in created_at:
+                        order_date = datetime.strptime(created_at, '%Y-%m-%d %H:%M:%S.%f').date()
+                    elif ' ' in created_at:
+                        order_date = datetime.strptime(created_at, '%Y-%m-%d %H:%M:%S').date()
+                    elif 'T' in created_at:
+                        clean = created_at.replace('Z', '').replace('+00:00', '')
+                        order_date = datetime.fromisoformat(clean).date() if '.' in clean else datetime.strptime(clean, '%Y-%m-%dT%H:%M:%S').date()
+                    else:
+                        order_date = datetime.strptime(created_at, '%Y-%m-%d').date()
+                else:
+                    continue
+            except Exception as e:
+                print(f"⚠️ Date parse error for '{created_at}': {e}")
+                continue
+
+            if order_date == today:
+                today_revenue += total
+                today_orders += 1
+            if order_date == today - timedelta(days=1):
+                yesterday_revenue += total
+            if order_date >= first_day_this_month:
+                month_revenue += total
+                month_orders += 1
+            if first_day_last_month <= order_date <= last_day_last_month:
+                last_month_revenue += total
+
+        today_growth = round(((today_revenue - yesterday_revenue) / yesterday_revenue) * 100, 1) if yesterday_revenue > 0 else (100.0 if today_revenue > 0 else 0)
+        month_growth = round(((month_revenue - last_month_revenue) / last_month_revenue) * 100, 1) if last_month_revenue > 0 else (100.0 if month_revenue > 0 else 0)
+
+        print(f"📊 Revenue: Total={total_revenue}, Today={today_revenue}, Month={month_revenue}")
+
+        return jsonify({
+            "total_revenue": total_revenue,
+            "total_profit": total_profit,
+            "total_orders": len(orders),
+            "total_items_sold": total_items_sold,
+            "today_revenue": today_revenue,
+            "today_orders": today_orders,
+            "yesterday_revenue": yesterday_revenue,
+            "month_revenue": month_revenue,
+            "month_orders": month_orders,
+            "last_month_revenue": last_month_revenue,
+            "today_growth_pct": today_growth,
+            "month_growth_pct": month_growth,
+        })
+
+    except Exception as exc:
+        print(f'❌ Revenue API error: {exc}')
+        traceback.print_exc()
+        return jsonify({"error": str(exc)}), 500
+
+
+def calculate_analytics_from_orders(orders):
+    """Helper function to calculate analytics from orders"""
+    if not orders:
+        return {
+            'total_revenue': 0,
+            'total_profit': 0,
+            'total_orders': 0,
+            'total_items_sold': 0,
+            'pos_orders_count': 0,
+            'web_orders_count': 0,
+            'product_sales': {},
+            'category_sales': {}
+        }
+    
+    total_revenue = sum(float(order.get('total', 0) or 0) for order in orders)
+    total_profit = 0
+    total_items_sold = 0
+    pos_orders_count = 0
+    web_orders_count = 0
+    product_sales = {}
+    category_sales = {}
+    
+    for order in orders:
+        # Count order sources
+        if order.get('source') == 'pos':
+            pos_orders_count += 1
+        else:
+            web_orders_count += 1
+        
+        # Process items
+        for item in order.get('items', []):
+            quantity = item.get('quantity', 1)
+            total_items_sold += quantity
+            
+            # Track product sales
+            product_id = item.get('product_id') or item.get('id')
+            if product_id:
+                product_sales[product_id] = product_sales.get(product_id, 0) + quantity
+            
+            # Track category sales if available
+            category = item.get('category')
+            if category:
+                category_sales[category] = category_sales.get(category, 0) + quantity
+            
+            # Calculate profit
+            price = item.get('price', 0)
+            cost_price = item.get('cost_price', 0)
+            if cost_price > 0:
+                total_profit += (price - cost_price) * quantity
+            elif price > 0:
+                # If no cost price, assume 30% profit margin
+                total_profit += price * quantity * 0.3
+    
+    return {
+        'total_revenue': total_revenue,
+        'total_profit': total_profit,
+        'total_orders': len(orders),
+        'total_items_sold': total_items_sold,
+        'pos_orders_count': pos_orders_count,
+        'web_orders_count': web_orders_count,
+        'product_sales': product_sales,
+        'category_sales': category_sales
+    }
+
+
+# ===== DEBUG ENDPOINTS =====
+
+@admin_bp.route('/admin/debug-orders', methods=['GET'])
+def debug_orders():
+    if not session.get('admin_logged_in'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    try:
+        orders = load_orders()
+        total_revenue = sum(float(o.get('total', 0) or 0) for o in orders)
+        
+        return jsonify({
+            'total_orders': len(orders),
+            'total_revenue': total_revenue,
+            'orders': [
+                {
+                    'order_id': o.get('order_id'),
+                    'total': o.get('total'),
+                    'source': o.get('source'),
+                    'created_at': o.get('created_at'),
+                    'items_count': len(o.get('items', []))
+                }
+                for o in orders[:20]
+            ],
+            'raw_orders_count': len(orders),
+            'all_totals': [o.get('total') for o in orders[:10]]
+        })
+    except Exception as e:
+        return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
+
+
+@admin_bp.route('/admin/debug-revenue', methods=['GET'])
+def debug_revenue():
+    if not session.get('admin_logged_in'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    try:
+        orders = load_orders()
+        total_revenue = sum(float(o.get('total', 0) or 0) for o in orders)
+        
+        # Get today's revenue
+        today = datetime.utcnow().date()
+        today_revenue = 0
+        today_orders = 0
+        
+        for o in orders:
+            created_at = o.get('created_at', '')
+            if created_at:
+                try:
+                    if isinstance(created_at, str):
+                        if 'T' in created_at:
+                            order_date = datetime.fromisoformat(created_at.replace('Z', '+00:00')).date()
+                        else:
+                            order_date = datetime.strptime(created_at[:10], '%Y-%m-%d').date()
+                    elif isinstance(created_at, datetime):
+                        order_date = created_at.date()
+                    else:
+                        continue
+                    
+                    if order_date == today:
+                        today_revenue += float(o.get('total', 0) or 0)
+                        today_orders += 1
+                except:
+                    pass
+        
+        return jsonify({
+            'total_revenue': total_revenue,
+            'today_revenue': today_revenue,
+            'total_orders': len(orders),
+            'today_orders': today_orders,
+            'orders_sample': [
+                {
+                    'order_id': o.get('order_id'),
+                    'total': o.get('total'),
+                    'created_at': o.get('created_at')
+                }
+                for o in orders[:10]
+            ]
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@admin_bp.route('/admin/test-order', methods=['GET'])
+def test_order():
+    if not session.get('admin_logged_in'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    try:
+        # Create a test order
+        test_order = {
+            'order_id': f'TEST-{uuid.uuid4().hex[:8].upper()}',
+            'items': [{
+                'name': 'Test Item', 
+                'price': 1000, 
+                'quantity': 1, 
+                'cost_price': 500,
+                'product_id': 'test_product'
+            }],
+            'subtotal': 1000,
+            'shipping': 0,
+            'total': 1000,
+            'status': 'test',
+            'source': 'test',
+            'created_at': datetime.utcnow().isoformat(),
+            'customer': {'name': 'Test Customer'}
+        }
+        
+        # Try to save
+        save_result = save_order_to_supabase(test_order)
+        
+        # Try to load
+        orders = load_orders()
+        revenue = sum(float(o.get('total', 0) or 0) for o in orders)
+        
+        return jsonify({
+            'save_result': save_result,
+            'total_orders': len(orders),
+            'total_revenue': revenue,
+            'test_order_id': test_order['order_id'],
+            'orders_preview': [
+                {'id': o.get('order_id'), 'total': o.get('total')} 
+                for o in orders[-5:]
+            ]
+        })
+    except Exception as e:
+        return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
 
 
 @admin_bp.route('/admin/upload-image', methods=['POST'])
