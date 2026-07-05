@@ -195,16 +195,17 @@ def load_bundles():
 def save_order_to_supabase(order_data):
     """Save order - direct to Supabase, with queue fallback per environment"""
     try:
+        # Prepare data for Supabase - NO json.dumps() here
         supabase_order = {
             'order_id': order_data.get('order_id'),
-            'items': order_data.get('items', []),
+            'items': order_data.get('items', []),  # Keep as list
             'subtotal': float(order_data.get('subtotal', 0)),
             'shipping': float(order_data.get('shipping', 0)),
             'total': float(order_data.get('total', 0)),
             'status': order_data.get('status', 'pending'),
             'source': order_data.get('source', 'web'),
             'created_at': order_data.get('created_at', datetime.utcnow().isoformat()),
-            'customer': order_data.get('customer', {})
+            'customer': order_data.get('customer', {})  # Keep as dict
         }
 
         response = requests.post(
