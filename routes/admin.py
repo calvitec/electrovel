@@ -518,6 +518,100 @@ def calculate_analytics_from_orders(orders):
         'category_sales': category_sales
     }
 
+@admin_bp.route('/admin/simple-test', methods=['GET'])
+def simple_test():
+    if not session.get('admin_logged_in'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    results = {}
+    
+    # 1. Test Supabase connection
+    try:
+        response = requests.get(
+            f"{Config.SUPABASE_URL}/rest/v1/",
+            headers=Config.SUPABASE_HEADERS,
+            timeout=5
+        )
+        results['supabase_connection'] = {
+            'status': response.status_code,
+            'ok': response.status_code == 200
+        }
+    except Exception as e:
+        results['supabase_connection'] = {'error': str(e)}
+    
+    # 2. Try to save a test order
+    test_order_id = f'TEST-{uuid.uuid4().hex[:8].upper()}'
+    test_order = {
+        'order_id': test_order_id,
+        'items': '[{"name":"Test","price":100,"quantity":1,"cost_price":50}]',
+        'subtotal': 100,
+        'shipping': 0,
+        'total': 100,
+        'status': 'test',
+        'source': 'test',
+        'created_at': datetime.utcnow().isoformat(),
+        'customer': '{"name":"Test"}'
+    }
+    
+    try:
+        response = requests.post(
+            f"{Config.SUPABASE_URL}/rest/v1/orders",
+            headers=Config.SUPABASE_HEADERS,
+            json=test_order,
+            timeout=10
+        )
+        results['save_test'] = {
+            'status': response.status_code,
+            'ok': response.status_code in [200, 201, 204],
+            'response': response.text[:200]
+        }
+    except Exception as e:
+        results['save_test'] = {'error': str(e)}
+    
+    # 3. Try to load orders
+    try:
+        response = requests.get(
+            f"{Config.SUPABASE_URL}/rest/v1/orders?limit=5",
+            headers=Config.SUPABASE_HEADERS,
+            timeout=10
+        )
+        if response.status_code == 200:
+            data = response.json()
+            results['load_test'] = {
+                'status': response.status_code,
+                'count': len(data),
+                'orders': data[:3]
+            }
+        else:
+            results['load_test'] = {
+                'status': response.status_code,
+                'error': response.text[:200]
+            }
+    except Exception as e:
+        results['load_test'] = {'error': str(e)}
+    
+    # 4. Clean up test order
+    try:
+        response = requests.delete(
+            f"{Config.SUPABASE_URL}/rest/v1/orders?order_id=eq.{test_order_id}",
+            headers=Config.SUPABASE_HEADERS,
+            timeout=5
+        )
+        results['cleanup'] = {'status': response.status_code}
+    except Exception as e:
+        results['cleanup'] = {'error': str(e)}
+    
+    # 5. Check what load_orders() returns
+    try:
+        orders = load_orders()
+        results['load_orders_result'] = {
+            'count': len(orders),
+            'sample': orders[:2] if orders else []
+        }
+    except Exception as e:
+        results['load_orders_result'] = {'error': str(e)}
+    
+    return jsonify(results)
 
 # ===== DEBUG ENDPOINTS =====
 
