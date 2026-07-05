@@ -323,24 +323,14 @@ def admin_api_revenue():
     
     try:
         orders = load_orders()
-        
         total_revenue = sum(float(order.get('total', 0) or 0) for order in orders)
         
         return jsonify({
             'total_revenue': total_revenue,
             'total_orders': len(orders),
             'total_profit': total_revenue * 0.3,
-            'total_items_sold': 0,
-            'today_revenue': 0,
-            'today_orders': 0,
-            'yesterday_revenue': 0,
-            'month_revenue': 0,
-            'month_orders': 0,
-            'last_month_revenue': 0,
-            'today_growth_pct': 0,
-            'month_growth_pct': 0
+            'total_items_sold': 0
         })
-
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 
@@ -357,9 +347,7 @@ def admin_api_analytics():
         return jsonify({'error': str(e)}), 500
 
 
-# ===== DEBUG ROUTES =====
-
-@admin_bp.route('/admin/test', methods=['GET'])
+@admin_bp.route('/admin/test')
 def admin_test():
     if not session.get('admin_logged_in'):
         return jsonify({'error': 'Unauthorized'}), 401
@@ -369,134 +357,18 @@ def admin_test():
         total_revenue = sum(float(o.get('total', 0) or 0) for o in orders)
         
         return jsonify({
-            'success': True,
             'total_orders': len(orders),
             'total_revenue': total_revenue,
             'orders': [
                 {
                     'order_id': o.get('order_id'),
-                    'total': o.get('total'),
-                    'source': o.get('source'),
-                    'created_at': o.get('created_at')
+                    'total': o.get('total')
                 }
                 for o in orders[:5]
             ]
         })
     except Exception as e:
-        return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
-
-
-@admin_bp.route('/admin/debug-full', methods=['GET'])
-def debug_full():
-    if not session.get('admin_logged_in'):
-        return jsonify({'error': 'Unauthorized'}), 401
-    
-    results = {}
-    
-    # 1. Check what key is being used
-    results['config'] = {
-        'supabase_url': Config.SUPABASE_URL,
-        'key_prefix': Config.SUPABASE_KEY[:20] + '...' if Config.SUPABASE_KEY else 'Not set',
-        'is_publishable': Config.SUPABASE_KEY.startswith('sb_publishable') if Config.SUPABASE_KEY else False,
-        'is_secret': Config.SUPABASE_KEY.startswith('sb_secret') if Config.SUPABASE_KEY else False,
-        'is_service_role': Config.SUPABASE_KEY.startswith('eyJ') if Config.SUPABASE_KEY else False,
-        'from_env': bool(os.environ.get('SUPABASE_KEY')),
-        'env_value': os.environ.get('SUPABASE_KEY', 'Not set')[:20] + '...' if os.environ.get('SUPABASE_KEY') else 'Not set'
-    }
-    
-    # 2. Test Supabase connection
-    try:
-        response = requests.get(
-            f"{Config.SUPABASE_URL}/rest/v1/",
-            headers=Config.SUPABASE_HEADERS,
-            timeout=5
-        )
-        results['connection'] = {
-            'status': response.status_code,
-            'ok': response.status_code == 200
-        }
-    except Exception as e:
-        results['connection'] = {'error': str(e)}
-    
-    # 3. Try to read orders
-    try:
-        response = requests.get(
-            f"{Config.SUPABASE_URL}/rest/v1/orders?limit=3",
-            headers=Config.SUPABASE_HEADERS,
-            timeout=10
-        )
-        if response.status_code == 200:
-            data = response.json()
-            results['read_orders'] = {
-                'status': response.status_code,
-                'count': len(data),
-                'sample': data[:2]
-            }
-        else:
-            results['read_orders'] = {
-                'status': response.status_code,
-                'error': response.text[:200]
-            }
-    except Exception as e:
-        results['read_orders'] = {'error': str(e)}
-    
-    # 4. Try to write a test order
-    test_id = f'TEST-{uuid.uuid4().hex[:8]}'
-    test_order = {
-        'order_id': test_id,
-        'items': [{'name': 'Test Product', 'price': 100, 'quantity': 1}],
-        'subtotal': 100,
-        'shipping': 0,
-        'total': 100,
-        'status': 'test',
-        'source': 'test',
-        'created_at': datetime.utcnow().isoformat(),
-        'customer': {'name': 'Test Customer'}
-    }
-    
-    try:
-        response = requests.post(
-            f"{Config.SUPABASE_URL}/rest/v1/orders",
-            headers=Config.SUPABASE_HEADERS,
-            json=test_order,
-            timeout=10
-        )
-        results['write_test'] = {
-            'status': response.status_code,
-            'success': response.status_code in [200, 201, 204],
-            'response': response.text[:200] if response.text else 'No response'
-        }
-        
-        # Clean up
-        if response.status_code in [200, 201, 204]:
-            requests.delete(
-                f"{Config.SUPABASE_URL}/rest/v1/orders?order_id=eq.{test_id}",
-                headers=Config.SUPABASE_HEADERS,
-                timeout=5
-            )
-            results['cleanup'] = 'Test order deleted'
-    except Exception as e:
-        results['write_test'] = {'error': str(e)}
-    
-    # 5. Check what load_orders() returns
-    try:
-        orders = load_orders()
-        results['load_orders'] = {
-            'count': len(orders),
-            'revenue': sum(float(o.get('total', 0) or 0) for o in orders),
-            'sample': [
-                {
-                    'order_id': o.get('order_id'),
-                    'total': o.get('total'),
-                    'source': o.get('source')
-                }
-                for o in orders[:3]
-            ]
-        }
-    except Exception as e:
-        results['load_orders'] = {'error': str(e)}
-    
-    return jsonify(results)
+        return jsonify({'error': str(e)}), 500
 
 
 @admin_bp.route('/admin/upload-image', methods=['POST'])
