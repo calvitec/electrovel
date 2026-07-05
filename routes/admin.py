@@ -128,6 +128,144 @@ def admin_dashboard():
             'db_mode': 'offline',
         }, DB_CONNECTED=False)
 
+@admin_bp.route('/admin/pos/place-order', methods=['POST'])
+def admin_pos_place_order():
+    if not session.get('admin_logged_in'):
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+
+    try:
+        print("🟢 ORDER ROUTE HIT - starting")   # <-- ADD THIS LINE
+
+        data = request.get_json()
+        if not data or not data.get('items'):
+            return jsonify({'success': False, 'message': 'No items in order'}), 400
+
+        order_id = f'POS-{uuid.uuid4().hex[:8].upper()}'
+        products = load_products()
+        product_lookup = {str(p.get('id')): p for p in products}
+
+        items = data.get('items', [])
+        calculated_subtotal = 0
+        items_with_cost = []
+
+        for item in items:
+            product_id = str(item.get('product_id'))
+            quantity = item.get('quantity', 1)
+            price = item.get('price', 0)
+            calculated_subtotal += price * quantity
+            product = product_lookup.get(product_id)
+            cost_price = product.get('cost_price', 0) if product else 0
+            item_with_cost = item.copy()
+            item_with_cost['cost_price'] = cost_price
+            items_with_cost.append(item_with_cost)
+            if product:
+                current_stock = product.get('stock', 0)
+                if current_stock < quantity:
+                    return jsonify({
+                        'success': False,
+                        'message': f'Not enough stock for {product.get("name")}. Available: {current_stock}'
+                    }), 400
+                new_stock = max(0, current_stock - quantity)
+                update_product_stock(product_id, new_stock)
+
+        subtotal = calculated_subtotal if calculated_subtotal > 0 else data.get('subtotal', 0)
+        shipping = data.get('shipping', 0)
+        total = subtotal + shipping
+
+        order_data = {
+            'order_id': order_id,
+            'items': items_with_cost,
+            'subtotal': subtotal,
+            'shipping': shipping,
+            'total': total,
+            'status': 'confirmed',
+            'source': 'pos',
+            'created_at': datetime.utcnow().isoformat(),
+            'customer': {
+                'name': data.get('customer_name', 'Walk-in Customer'),
+                'email': data.get('customer_email', 'walkin@example.com'),
+                'phone': data.get('customer_phone', 'N/A'),
+                'address': data.get('customer_address', 'In-store purchase'),
+            },
+        }
+
+        print(f"🟡 About to save order_data: {order_data}")   # <-- ADD THIS LINE
+        save_result = save_order_to_supabase(order_data)
+        print(f"🔵 save_order_to_supabase returned: {save_result}")   # <-- ADD THIS LINE
+
+        if save_result.get('success'):
+            all_orders = load_orders()
+            total_revenue = sum(order.get('total', 0) for order in all_orders)
+            # ... rest unchanged@admin_bp.route('/admin/pos/place-order', methods=['POST'])
+def admin_pos_place_order():
+    if not session.get('admin_logged_in'):
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+
+    try:
+        print("🟢 ORDER ROUTE HIT - starting")   # <-- ADD THIS LINE
+
+        data = request.get_json()
+        if not data or not data.get('items'):
+            return jsonify({'success': False, 'message': 'No items in order'}), 400
+
+        order_id = f'POS-{uuid.uuid4().hex[:8].upper()}'
+        products = load_products()
+        product_lookup = {str(p.get('id')): p for p in products}
+
+        items = data.get('items', [])
+        calculated_subtotal = 0
+        items_with_cost = []
+
+        for item in items:
+            product_id = str(item.get('product_id'))
+            quantity = item.get('quantity', 1)
+            price = item.get('price', 0)
+            calculated_subtotal += price * quantity
+            product = product_lookup.get(product_id)
+            cost_price = product.get('cost_price', 0) if product else 0
+            item_with_cost = item.copy()
+            item_with_cost['cost_price'] = cost_price
+            items_with_cost.append(item_with_cost)
+            if product:
+                current_stock = product.get('stock', 0)
+                if current_stock < quantity:
+                    return jsonify({
+                        'success': False,
+                        'message': f'Not enough stock for {product.get("name")}. Available: {current_stock}'
+                    }), 400
+                new_stock = max(0, current_stock - quantity)
+                update_product_stock(product_id, new_stock)
+
+        subtotal = calculated_subtotal if calculated_subtotal > 0 else data.get('subtotal', 0)
+        shipping = data.get('shipping', 0)
+        total = subtotal + shipping
+
+        order_data = {
+            'order_id': order_id,
+            'items': items_with_cost,
+            'subtotal': subtotal,
+            'shipping': shipping,
+            'total': total,
+            'status': 'confirmed',
+            'source': 'pos',
+            'created_at': datetime.utcnow().isoformat(),
+            'customer': {
+                'name': data.get('customer_name', 'Walk-in Customer'),
+                'email': data.get('customer_email', 'walkin@example.com'),
+                'phone': data.get('customer_phone', 'N/A'),
+                'address': data.get('customer_address', 'In-store purchase'),
+            },
+        }
+
+        print(f"🟡 About to save order_data: {order_data}")   # <-- ADD THIS LINE
+        save_result = save_order_to_supabase(order_data)
+        print(f"🔵 save_order_to_supabase returned: {save_result}")   # <-- ADD THIS LINE
+
+        if save_result.get('success'):
+            all_orders = load_orders()
+            total_revenue = sum(order.get('total', 0) for order in all_orders)
+            # ... rest unchanged
+
 
 @admin_bp.route('/admin/pos')
 def admin_pos():
