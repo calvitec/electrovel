@@ -19,12 +19,7 @@ class Config:
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
     MAX_CONTENT_LENGTH = 5 * 1024 * 1024
 
-    # ===== SUPABASE CONFIGURATION =====
-    # Use environment variables on Vercel, fallback for local development
     SUPABASE_URL = os.environ.get('SUPABASE_URL', 'https://hzqrdwerkgfmfaufabjr.supabase.co')
-    
-    # IMPORTANT: Use your SECRET key (starts with sb_secret)
-    # This key has write permissions for server-side operations
     SUPABASE_KEY = os.environ.get('SUPABASE_KEY', 'sb_secret_8Jk_nZzU7_cEBspHtHV0Ew_KTxfnQ65')
     
     SUPABASE_HEADERS = {
