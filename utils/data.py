@@ -20,7 +20,7 @@ def get_sample_products():
             'price': 245000,
             'cost_price': 180000,
             'category': 'Phones',
-            'description': 'Latest Apple flagship with A17 Pro chip',
+            'description': 'Latest Apple flagship',
             'image': 'https://images.unsplash.com/photo-1592286927505-1def25e4c479?w=500',
             'stock': 15,
             'rating': 4.9,
@@ -33,7 +33,7 @@ def get_sample_products():
             'price': 450000,
             'cost_price': 350000,
             'category': 'Laptops',
-            'description': 'Professional laptop with M3 Max chip',
+            'description': 'Professional laptop',
             'image': 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=500',
             'stock': 8,
             'rating': 4.8,
@@ -46,7 +46,7 @@ def get_sample_products():
             'price': 35000,
             'cost_price': 22000,
             'category': 'Accessories',
-            'description': 'Premium wireless earbuds with ANC',
+            'description': 'Premium wireless earbuds',
             'image': 'https://images.unsplash.com/photo-1606841838e0-bf1baf2dc3e9?w=500',
             'stock': 25,
             'rating': 4.7,
@@ -59,7 +59,7 @@ def get_sample_products():
             'price': 225000,
             'cost_price': 115000,
             'category': 'Phones',
-            'description': 'Flagship Android phone with advanced camera',
+            'description': 'Flagship Android phone',
             'image': 'https://images.unsplash.com/photo-1511707267537-b85faf00021e?w=500',
             'stock': 23,
             'rating': 4.6,
@@ -71,7 +71,7 @@ def get_sample_products():
             'price': 185000,
             'cost_price': 140000,
             'category': 'Tablets',
-            'description': 'Powerful tablet with M2 chip',
+            'description': 'Powerful tablet',
             'image': 'https://images.unsplash.com/photo-1561070791-2526d30994b5?w=500',
             'stock': 12,
             'rating': 4.7,
@@ -82,7 +82,6 @@ def get_sample_products():
 
 
 def load_orders():
-    """Load orders from Supabase ONLY"""
     global orders_cache
     try:
         response = requests.get(
@@ -232,7 +231,6 @@ def get_sales_analytics():
                 'customer_data': {}
             }
 
-        # ===== CREATE PRODUCT LOOKUP =====
         product_lookup = {str(p.get('id')): p for p in products if p and p.get('id')}
 
         total_revenue = 0
@@ -349,7 +347,6 @@ def get_sales_analytics():
                 if cost_price == 0 and price > 0:
                     cost_price = price * 0.7
                 
-                # Ensure cost_price is a valid number
                 if cost_price is None or cost_price == '' or cost_price != cost_price:
                     cost_price = 0
                 
