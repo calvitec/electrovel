@@ -20,7 +20,7 @@ def get_sample_products():
             'price': 245000,
             'cost_price': 180000,
             'category': 'Phones',
-            'description': 'Latest Apple flagship',
+            'description': 'Latest Apple flagship with A17 Pro chip',
             'image': 'https://images.unsplash.com/photo-1592286927505-1def25e4c479?w=500',
             'stock': 15,
             'rating': 4.9,
@@ -33,7 +33,7 @@ def get_sample_products():
             'price': 450000,
             'cost_price': 350000,
             'category': 'Laptops',
-            'description': 'Professional laptop',
+            'description': 'Professional laptop with M3 Max chip',
             'image': 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=500',
             'stock': 8,
             'rating': 4.8,
@@ -46,7 +46,7 @@ def get_sample_products():
             'price': 35000,
             'cost_price': 22000,
             'category': 'Accessories',
-            'description': 'Premium wireless earbuds',
+            'description': 'Premium wireless earbuds with ANC',
             'image': 'https://images.unsplash.com/photo-1606841838e0-bf1baf2dc3e9?w=500',
             'stock': 25,
             'rating': 4.7,
@@ -59,7 +59,7 @@ def get_sample_products():
             'price': 225000,
             'cost_price': 115000,
             'category': 'Phones',
-            'description': 'Flagship Android phone',
+            'description': 'Flagship Android phone with advanced camera',
             'image': 'https://images.unsplash.com/photo-1511707267537-b85faf00021e?w=500',
             'stock': 23,
             'rating': 4.6,
@@ -71,17 +71,90 @@ def get_sample_products():
             'price': 185000,
             'cost_price': 140000,
             'category': 'Tablets',
-            'description': 'Powerful tablet',
+            'description': 'Powerful tablet with M2 chip',
             'image': 'https://images.unsplash.com/photo-1561070791-2526d30994b5?w=500',
             'stock': 12,
             'rating': 4.7,
             'reviews': 198,
             'badge': 'New'
+        },
+        {
+            'id': 'hp_spectre',
+            'name': 'HP Spectre x360',
+            'price': 125000,
+            'cost_price': 90000,
+            'category': 'Laptops',
+            'description': 'Convertible premium laptop',
+            'image': 'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=500',
+            'stock': 18,
+            'rating': 4.5,
+            'reviews': 112
+        },
+        {
+            'id': 'watch_9',
+            'name': 'Apple Watch Series 9',
+            'price': 62000,
+            'cost_price': 45000,
+            'category': 'Wearables',
+            'description': 'Smartwatch with fitness tracking',
+            'image': 'https://images.unsplash.com/photo-1546868871-7041f2a55e12?w=500',
+            'stock': 26,
+            'rating': 4.8,
+            'reviews': 173
+        },
+        {
+            'id': 'usb_c_cable',
+            'name': 'USB-C Fast Charging Cable',
+            'price': 1200,
+            'cost_price': 700,
+            'category': 'Accessories',
+            'description': 'Fast charging cable',
+            'image': 'https://images.unsplash.com/photo-1583394838336-acd977736f90?w=500',
+            'stock': 98,
+            'rating': 4.4,
+            'reviews': 67
+        },
+        {
+            'id': 'dell_xps',
+            'name': 'Dell XPS 15',
+            'price': 165000,
+            'cost_price': 120000,
+            'category': 'Laptops',
+            'description': 'Thin and powerful productivity laptop',
+            'image': 'https://images.unsplash.com/photo-1525547719571-a2d4ac8945e2?w=500',
+            'stock': 4,
+            'rating': 4.6,
+            'reviews': 99
+        },
+        {
+            'id': 'power_bank',
+            'name': 'Anker 20000mAh Power Bank',
+            'price': 8500,
+            'cost_price': 5000,
+            'category': 'Accessories',
+            'description': 'Portable charger for travel',
+            'image': 'https://images.unsplash.com/photo-1609091839311-d5365f9ff1c5?w=500',
+            'stock': 57,
+            'rating': 4.7,
+            'reviews': 88
+        },
+        {
+            'id': 'buds_2',
+            'name': 'Samsung Galaxy Buds 2',
+            'price': 18000,
+            'cost_price': 12000,
+            'category': 'Audio',
+            'description': 'Noise-cancelling earbuds',
+            'image': 'https://images.unsplash.com/photo-1606225457115-9b0de873c5e1?w=500',
+            'stock': 45,
+            'rating': 4.5,
+            'reviews': 74
         }
     ]
 
 
 def load_orders():
+    """Load orders from Supabase ONLY - NO LOCAL FILES"""
     global orders_cache
     try:
         response = requests.get(
@@ -147,6 +220,18 @@ def load_bundles():
         return []
     except Exception:
         return []
+
+
+def sync_products_from_supabase():
+    return load_products()
+
+
+def sync_pending_data_if_possible():
+    return True
+
+
+def sync_queued_orders():
+    return True
 
 
 def save_order_to_supabase(order_data):
@@ -313,40 +398,26 @@ def get_sales_analytics():
                 price = float(item.get('price', 0) or 0)
                 item_total = float(item.get('total', price * quantity) or 0)
                 
-                # ===== FIX: GET COST FROM PRODUCTS TABLE =====
+                # ===== Get cost_price =====
                 cost_price = 0
                 
-                # Try by product_id first
-                if product_id:
-                    product = product_lookup.get(product_id, {})
-                    if product:
-                        try:
-                            cost_price = float(product.get('cost_price', 0) or 0)
-                        except (ValueError, TypeError):
-                            cost_price = 0
-                
-                # If not found, try by name
-                if cost_price == 0:
-                    item_name = item.get('name', '')
-                    for product in product_lookup.values():
-                        if product.get('name') == item_name:
-                            try:
-                                cost_price = float(product.get('cost_price', 0) or 0)
-                                break
-                            except (ValueError, TypeError):
-                                cost_price = 0
-                
-                # If still 0, try cost_price from item
-                if cost_price == 0 and 'cost_price' in item:
+                # First try: cost_price from order item
+                if 'cost_price' in item:
                     try:
                         cost_price = float(item.get('cost_price', 0) or 0)
                     except (ValueError, TypeError):
                         cost_price = 0
                 
-                # Final fallback: 70% of price (30% profit margin)
-                if cost_price == 0 and price > 0:
-                    cost_price = price * 0.7
+                # Second try: get from product lookup
+                if cost_price == 0 and product_id:
+                    product = product_lookup.get(product_id, {})
+                    if product and 'cost_price' in product:
+                        try:
+                            cost_price = float(product.get('cost_price', 0) or 0)
+                        except (ValueError, TypeError):
+                            cost_price = 0
                 
+                # Ensure cost_price is a valid number
                 if cost_price is None or cost_price == '' or cost_price != cost_price:
                     cost_price = 0
                 
@@ -422,18 +493,6 @@ def get_sales_analytics():
             'product_sales': {},
             'customer_data': {},
         }
-
-
-def sync_queued_orders():
-    return True
-
-
-def sync_pending_data_if_possible():
-    return True
-
-
-def sync_products_from_supabase():
-    return load_products()
 
 
 def get_category_icon(category):
