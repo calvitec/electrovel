@@ -1,4 +1,10 @@
+import sys
 import os
+import json
+
+# Add the project root to Python path so config can be found
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import traceback
 import uuid
 from datetime import datetime, timedelta
@@ -7,6 +13,7 @@ import requests
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, session, url_for
 from werkzeug.utils import secure_filename
 
+# Now this will work
 from config import Config
 from utils.data import get_cart, get_sales_analytics, load_bundles, load_orders, load_products, save_order_to_supabase, update_product_stock
 
@@ -55,32 +62,87 @@ def admin_dashboard():
         customer_list = {}
         pos_count = 0
         web_count = 0
+        
         for order in orders:
-            customer = order.get('customer', {})
-            if isinstance(customer, str):
-                try:
-                    customer = __import__('json').loads(customer)
-                except Exception:
-                    customer = {}
-            if isinstance(customer, list):
-                customer = customer[0] if customer else {}
-            if not isinstance(customer, dict):
-                customer = {}
-            source = order.get('source', 'web')
-            if source == 'pos':
+            # ===== GET CUSTOMER NAME FROM MULTIPLE SOURCES =====
+            name = None
+            
+            # First try the direct customer_name column
+            if order.get('customer_name'):
+                name = order.get('customer_name')
+            
+            # If not found, try the customer JSON
+            if not name:
+                customer = order.get('customer', {})
+                if isinstance(customer, dict):
+                    name = customer.get('name')
+                elif isinstance(customer, str):
+                    try:
+                        customer = json.loads(customer)
+                        name = customer.get('name')
+                    except:
+                        pass
+            
+            # If still not found, try email
+            if not name:
+                email = order.get('customer_email')
+                if email and '@' in email:
+                    name = email.split('@')[0]
+            
+            # If still not found, use fallback
+            if not name:
+                if order.get('source') == 'pos':
+                    name = 'Walk-in Customer'
+                else:
+                    name = 'Web Customer'
+            
+            # Get email and phone
+            email = order.get('customer_email', 'N/A')
+            if not email or email == 'N/A':
+                customer = order.get('customer', {})
+                if isinstance(customer, dict):
+                    email = customer.get('email', 'N/A')
+                elif isinstance(customer, str):
+                    try:
+                        customer = json.loads(customer)
+                        email = customer.get('email', 'N/A')
+                    except:
+                        pass
+            
+            phone = order.get('customer_phone', 'N/A')
+            if not phone or phone == 'N/A':
+                customer = order.get('customer', {})
+                if isinstance(customer, dict):
+                    phone = customer.get('phone', 'N/A')
+                elif isinstance(customer, str):
+                    try:
+                        customer = json.loads(customer)
+                        phone = customer.get('phone', 'N/A')
+                    except:
+                        pass
+            
+            # Track source
+            if order.get('source') == 'pos':
                 pos_count += 1
             else:
                 web_count += 1
-            name = customer.get('name', 'Unknown') if isinstance(customer, dict) else 'Unknown'
-            if name and name != 'Unknown':
-                if name not in customer_list:
-                    customer_list[name] = {'name': name, 'email': customer.get('email', ''), 'phone': customer.get('phone', ''), 'orders': 0, 'total_spent': 0}
-                customer_list[name]['orders'] += 1
-                customer_list[name]['total_spent'] += order.get('total', 0)
+            
+            # Add to customer list
+            if name not in customer_list:
+                customer_list[name] = {
+                    'name': name,
+                    'email': email if email else 'N/A',
+                    'phone': phone if phone else 'N/A',
+                    'orders': 0,
+                    'total_spent': 0
+                }
+            customer_list[name]['orders'] += 1
+            customer_list[name]['total_spent'] += order.get('total', 0)
 
         customers = list(customer_list.values())
         customers.sort(key=lambda x: x['orders'], reverse=True)
 
+        # ===== STATS =====
         stats = {
             'total_products': len(products),
             'total_bundles': len(bundles),
@@ -98,27 +160,46 @@ def admin_dashboard():
             'db_mode': 'online',
         }
 
-        return render_template('admin.html', products=products, bundles=bundles, orders=orders, customers=customers, stats=stats, pos_count=pos_count, analytics=analytics, DB_CONNECTED=True)
+        return render_template('admin.html', 
+            products=products, 
+            bundles=bundles, 
+            orders=orders, 
+            customers=customers, 
+            stats=stats, 
+            pos_count=pos_count, 
+            analytics=analytics, 
+            DB_CONNECTED=True
+        )
+        
     except Exception as exc:
         print(f'Admin dashboard error: {exc}')
         traceback.print_exc()
         flash('Error loading admin dashboard', 'danger')
-        return render_template('admin.html', products=[], bundles=[], orders=[], customers=[], pos_count=0, analytics={}, stats={
-            'total_products': 0,
-            'total_bundles': 0,
-            'total_cart_items': 0,
-            'low_stock': 0,
-            'total_orders': 0,
-            'pending_orders': 0,
-            'pos_orders': 0,
-            'web_orders': 0,
-            'total_revenue': 0,
-            'total_cost': 0,
-            'total_profit': 0,
-            'total_items_sold': 0,
-            'total_customers': 0,
-            'db_mode': 'offline',
-        }, DB_CONNECTED=False)
+        return render_template('admin.html', 
+            products=[], 
+            bundles=[], 
+            orders=[], 
+            customers=[], 
+            pos_count=0, 
+            analytics={}, 
+            stats={
+                'total_products': 0,
+                'total_bundles': 0,
+                'total_cart_items': 0,
+                'low_stock': 0,
+                'total_orders': 0,
+                'pending_orders': 0,
+                'pos_orders': 0,
+                'web_orders': 0,
+                'total_revenue': 0,
+                'total_cost': 0,
+                'total_profit': 0,
+                'total_items_sold': 0,
+                'total_customers': 0,
+                'db_mode': 'offline',
+            }, 
+            DB_CONNECTED=False
+        )
 
 
 @admin_bp.route('/admin/pos')
@@ -142,23 +223,64 @@ def admin_pos():
 
     customer_list = {}
     orders = load_orders()
+    
     for order in orders:
-        customer = order.get('customer', {})
-        if isinstance(customer, str):
-            try:
-                customer = __import__('json').loads(customer)
-            except Exception:
-                customer = {}
-        if isinstance(customer, list):
-            customer = customer[0] if customer else {}
-        if not isinstance(customer, dict):
-            customer = {}
-        name = customer.get('name', 'Unknown') if isinstance(customer, dict) else 'Unknown'
-        if name and name != 'Unknown':
-            if name not in customer_list:
-                customer_list[name] = {'name': name, 'email': customer.get('email', ''), 'phone': customer.get('phone', ''), 'orders': 0, 'total_spent': 0}
-            customer_list[name]['orders'] += 1
-            customer_list[name]['total_spent'] += order.get('total', 0)
+        # ===== GET CUSTOMER NAME FROM MULTIPLE SOURCES =====
+        name = None
+        
+        # First try the direct customer_name column
+        if order.get('customer_name'):
+            name = order.get('customer_name')
+        
+        # If not found, try the customer JSON
+        if not name:
+            customer = order.get('customer', {})
+            if isinstance(customer, dict):
+                name = customer.get('name')
+            elif isinstance(customer, str):
+                try:
+                    customer = json.loads(customer)
+                    name = customer.get('name')
+                except:
+                    pass
+        
+        # If still not found, try email
+        if not name:
+            email = order.get('customer_email')
+            if email and '@' in email:
+                name = email.split('@')[0]
+        
+        # If still not found, use fallback
+        if not name:
+            if order.get('source') == 'pos':
+                name = 'Walk-in Customer'
+            else:
+                name = 'Web Customer'
+        
+        # Get email and phone
+        email = order.get('customer_email', 'N/A')
+        if not email or email == 'N/A':
+            customer = order.get('customer', {})
+            if isinstance(customer, dict):
+                email = customer.get('email', 'N/A')
+        
+        phone = order.get('customer_phone', 'N/A')
+        if not phone or phone == 'N/A':
+            customer = order.get('customer', {})
+            if isinstance(customer, dict):
+                phone = customer.get('phone', 'N/A')
+        
+        # Add to customer list
+        if name not in customer_list:
+            customer_list[name] = {
+                'name': name,
+                'email': email if email else 'N/A',
+                'phone': phone if phone else 'N/A',
+                'orders': 0,
+                'total_spent': 0
+            }
+        customer_list[name]['orders'] += 1
+        customer_list[name]['total_spent'] += order.get('total', 0)
 
     customers = list(customer_list.values())
     customers.sort(key=lambda x: x['orders'], reverse=True)
@@ -211,6 +333,24 @@ def admin_pos_place_order():
         shipping = data.get('shipping', 0)
         total = subtotal + shipping
 
+        # ===== GET CUSTOMER DATA =====
+        customer_name = data.get('customer_name', '')
+        if not customer_name:
+            customer_name = data.get('customerName', '')
+        if not customer_name:
+            customer = data.get('customer', {})
+            if isinstance(customer, dict):
+                customer_name = customer.get('name', '')
+        if not customer_name:
+            customer_name = 'Walk-in Customer'
+        
+        customer_name = customer_name.strip()
+        
+        customer_email = data.get('customer_email', '') or data.get('customerEmail', '') or 'walkin@example.com'
+        customer_phone = data.get('customer_phone', '') or data.get('customerPhone', '') or 'N/A'
+        customer_address = data.get('customer_address', '') or data.get('customerAddress', '') or 'In-store purchase'
+
+        # ===== BUILD ORDER DATA WITH ALL FIELDS =====
         order_data = {
             'order_id': order_id,
             'items': items_with_cost,
@@ -220,17 +360,38 @@ def admin_pos_place_order():
             'status': 'confirmed',
             'source': 'pos',
             'created_at': datetime.utcnow().isoformat(),
+            # Customer fields directly in the table
+            'customer_name': customer_name,
+            'customer_email': customer_email,
+            'customer_phone': customer_phone,
+            'customer_address': customer_address,
+            # Customer as JSON for compatibility
             'customer': {
-                'name': data.get('customer_name', 'Walk-in Customer'),
-                'email': data.get('customer_email', 'walkin@example.com'),
-                'phone': data.get('customer_phone', 'N/A'),
-                'address': data.get('customer_address', 'In-store purchase'),
-            },
+                'name': customer_name,
+                'email': customer_email,
+                'phone': customer_phone,
+                'address': customer_address,
+            }
         }
 
-        save_result = save_order_to_supabase(order_data)
-        
-        if save_result.get('success'):
+        print(f"🔥 SAVING ORDER WITH CUSTOMER NAME: {customer_name}")
+        print(f"📦 Order ID: {order_id}")
+
+        # ===== SAVE DIRECTLY TO SUPABASE =====
+        response = requests.post(
+            f"{Config.SUPABASE_URL}/rest/v1/orders",
+            headers=Config.SUPABASE_HEADERS,
+            json=order_data,
+            timeout=10,
+        )
+
+        if response.status_code in [200, 201]:
+            print(f"✅ Order saved successfully: {order_id}")
+            
+            # Clear cache
+            import utils.data
+            utils.data.orders_cache = []
+            
             all_orders = load_orders()
             
             total_revenue = sum(order.get('total', 0) for order in all_orders)
@@ -281,13 +442,14 @@ def admin_pos_place_order():
                     'pos_orders_count': pos_orders_count,
                     'web_orders_count': web_orders_count,
                 }, 
-                'queued': save_result.get('queued', False), 
-                'synced': save_result.get('synced', False)
+                'queued': False, 
+                'synced': True
             })
         else:
+            print(f"❌ Supabase error: {response.status_code} - {response.text}")
             return jsonify({
                 'success': False, 
-                'message': save_result.get('message', 'Failed to save order')
+                'message': f'Database error: {response.status_code}'
             }), 500
             
     except Exception as exc:
@@ -301,7 +463,6 @@ def admin_api_analytics():
     if not session.get('admin_logged_in'):
         return jsonify({'error': 'Unauthorized'}), 401
     
-    # Force refresh analytics
     orders = load_orders()
     analytics = calculate_analytics_from_orders(orders)
     return jsonify(analytics)
@@ -316,7 +477,6 @@ def admin_api_revenue():
         orders = load_orders()
         analytics = calculate_analytics_from_orders(orders)
 
-        # ===== FIX: Calculate today/month revenue =====
         now = datetime.utcnow()
         today = now.date()
         first_day_this_month = today.replace(day=1)
@@ -376,7 +536,6 @@ def admin_api_revenue():
             if first_day_last_month <= order_date <= last_day_last_month:
                 last_month_revenue += total
 
-        # Calculate growth percentages
         today_growth = round(((today_revenue - yesterday_revenue) / yesterday_revenue) * 100, 1) if yesterday_revenue > 0 else (100.0 if today_revenue > 0 else 0)
         month_growth = round(((month_revenue - last_month_revenue) / last_month_revenue) * 100, 1) if last_month_revenue > 0 else (100.0 if month_revenue > 0 else 0)
 
@@ -418,7 +577,6 @@ def calculate_analytics_from_orders(orders):
             'monthly_data': {}
         }
     
-    # Load products for category lookup
     products = load_products()
     product_lookup = {str(p.get('id')): p for p in products if p and p.get('id')}
     
@@ -436,13 +594,11 @@ def calculate_analytics_from_orders(orders):
         if order.get('status') == 'cancelled':
             continue
             
-        # Count order sources
         if order.get('source') == 'pos':
             pos_orders_count += 1
         else:
             web_orders_count += 1
         
-        # Get order date for monthly grouping
         created_at = order.get('created_at', '')
         month_key = 'Unknown'
         if created_at:
@@ -466,7 +622,6 @@ def calculate_analytics_from_orders(orders):
             except:
                 month_key = 'Unknown'
         
-        # Initialize monthly data
         if month_key not in monthly_data:
             monthly_data[month_key] = {
                 'orders': 0,
@@ -478,7 +633,6 @@ def calculate_analytics_from_orders(orders):
             }
         monthly_data[month_key]['orders'] += 1
         
-        # Process items
         order_total = 0
         order_cost = 0
         order_items = 0
@@ -489,22 +643,18 @@ def calculate_analytics_from_orders(orders):
             total_items_sold += quantity
             order_items += quantity
             
-            # Calculate revenue
             item_total = price * quantity
             order_total += item_total
             total_revenue += item_total
             
-            # Calculate cost
             cost_price = 0
             
-            # Try to get cost_price from item
             if 'cost_price' in item:
                 try:
                     cost_price = float(item.get('cost_price', 0) or 0)
                 except (ValueError, TypeError):
                     cost_price = 0
             
-            # If no cost_price, look up from product
             if cost_price == 0:
                 product_id = item.get('product_id', '')
                 if product_id:
@@ -512,7 +662,6 @@ def calculate_analytics_from_orders(orders):
                     if product:
                         cost_price = float(product.get('cost_price', 0) or 0)
             
-            # If still 0, use 70% of price
             if cost_price == 0 and price > 0:
                 cost_price = price * 0.7
             
@@ -521,7 +670,6 @@ def calculate_analytics_from_orders(orders):
             total_cost += item_cost
             total_profit += (item_total - item_cost)
             
-            # ===== GET CATEGORY FROM PRODUCT LOOKUP =====
             product_id = item.get('product_id', '')
             category = 'Uncategorized'
             if product_id:
@@ -529,7 +677,6 @@ def calculate_analytics_from_orders(orders):
                 if product and product.get('category'):
                     category = product.get('category')
             
-            # Track product sales
             product_name = item.get('name', 'Unknown Product')
             if product_name not in product_sales:
                 product_sales[product_name] = {
@@ -544,7 +691,6 @@ def calculate_analytics_from_orders(orders):
             product_sales[product_name]['cost'] += item_cost
             product_sales[product_name]['profit'] += (item_total - item_cost)
             
-            # ===== TRACK CATEGORY SALES =====
             if category not in category_sales:
                 category_sales[category] = {
                     'quantity': 0,
@@ -558,13 +704,11 @@ def calculate_analytics_from_orders(orders):
             category_sales[category]['cost'] += item_cost
             category_sales[category]['profit'] += (item_total - item_cost)
         
-        # Update monthly data
         monthly_data[month_key]['items'] += order_items
         monthly_data[month_key]['revenue'] += order_total
         monthly_data[month_key]['cost'] += order_cost
         monthly_data[month_key]['profit'] += (order_total - order_cost)
     
-    # Calculate margins
     for product in product_sales.values():
         if product['revenue'] > 0:
             product['margin'] = round((product['profit'] / product['revenue']) * 100, 1)
@@ -577,7 +721,6 @@ def calculate_analytics_from_orders(orders):
         if month['revenue'] > 0:
             month['margin'] = round((month['profit'] / month['revenue']) * 100, 1)
     
-    # Sort product sales by profit
     sorted_products = sorted(
         product_sales.items(),
         key=lambda x: x[1]['profit'],
@@ -624,31 +767,63 @@ def admin_products():
         return jsonify({'success': False, 'message': 'Unauthorized'}), 401
 
     try:
+        product_id = request.form.get('id', '').strip()
+        if not product_id:
+            return jsonify({'success': False, 'message': 'Product ID is required'}), 400
+        
         product_data = {
-            'id': request.form.get('id'),
-            'name': request.form.get('name'),
-            'price': float(request.form.get('price', 0)),
-            'cost_price': float(request.form.get('cost_price', 0)) or 0,
-            'image': request.form.get('image'),
-            'category': request.form.get('category'),
-            'description': request.form.get('description'),
-            'rating': float(request.form.get('rating', 4.0)),
-            'reviews': int(request.form.get('reviews', 0)),
-            'badge': request.form.get('badge', ''),
-            'stock': int(request.form.get('stock', 0)),
-            'original_price': float(request.form.get('original_price', 0)) or None,
-            'specs': request.form.get('specs', '').split(',') if request.form.get('specs') else [],
+            'id': product_id,
+            'name': request.form.get('name', '').strip(),
+            'price': float(request.form.get('price', 0) or 0),
+            'cost_price': float(request.form.get('cost_price', 0) or 0),
+            'image': request.form.get('image', '').strip(),
+            'category': request.form.get('category', '').strip(),
+            'description': request.form.get('description', '').strip(),
+            'rating': float(request.form.get('rating', 4.0) or 4.0),
+            'reviews': int(request.form.get('reviews', 0) or 0),
+            'badge': request.form.get('badge', '').strip(),
+            'stock': int(request.form.get('stock', 0) or 0),
+            'original_price': float(request.form.get('original_price', 0) or 0) or None,
+            'specs': [s.strip() for s in request.form.get('specs', '').split(',') if s.strip()]
         }
+        
+        existing_products = load_products()
+        product_exists = False
+        for p in existing_products:
+            if p.get('id') == product_id:
+                product_exists = True
+                break
+        
+        if product_exists:
+            response = requests.patch(
+                f"{Config.SUPABASE_URL}/rest/v1/products?id=eq.{product_id}",
+                headers=Config.SUPABASE_HEADERS,
+                json=product_data,
+                timeout=5,
+            )
+            if response.status_code in [200, 204]:
+                import utils.data
+                utils.data.products_cache = []
+                return jsonify({'success': True, 'message': 'Product updated successfully!', 'product': product_data})
+            return jsonify({'success': False, 'message': f'Error updating product: {response.status_code}'}), 500
+        
         response = requests.post(
             f"{Config.SUPABASE_URL}/rest/v1/products",
             headers=Config.SUPABASE_HEADERS,
             json=product_data,
             timeout=5,
         )
+        
         if response.status_code in [200, 201]:
+            import utils.data
+            utils.data.products_cache = []
             return jsonify({'success': True, 'message': 'Product saved successfully!', 'product': product_data})
-        return jsonify({'success': False, 'message': 'Error saving product'}), 500
+        
+        return jsonify({'success': False, 'message': f'Error saving product: {response.status_code} - {response.text}'}), 500
+        
     except Exception as exc:
+        print(f'Product save error: {exc}')
+        traceback.print_exc()
         return jsonify({'success': False, 'message': str(exc)}), 500
 
 
@@ -663,6 +838,8 @@ def admin_delete_product(product_id):
             timeout=5,
         )
         if response.status_code in [200, 204]:
+            import utils.data
+            utils.data.products_cache = []
             return jsonify({'success': True})
         return jsonify({'success': False, 'message': 'Failed to delete'})
     except Exception as exc:
@@ -747,3 +924,142 @@ def admin_test():
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+@admin_bp.route('/admin/debug-customers', methods=['GET'])
+def debug_customers():
+    """Debug endpoint to check what customers are in the system"""
+    if not session.get('admin_logged_in'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    try:
+        orders = load_orders()
+        customer_list = {}
+        
+        for order in orders:
+            name = None
+            
+            # First try the direct customer_name column
+            if order.get('customer_name'):
+                name = order.get('customer_name')
+            
+            # If not found, try the customer JSON
+            if not name:
+                customer = order.get('customer', {})
+                if isinstance(customer, dict):
+                    name = customer.get('name')
+                elif isinstance(customer, str):
+                    try:
+                        customer = json.loads(customer)
+                        name = customer.get('name')
+                    except:
+                        pass
+            
+            # If still not found, try email
+            if not name:
+                email = order.get('customer_email')
+                if email and '@' in email:
+                    name = email.split('@')[0]
+            
+            # If still not found, use fallback
+            if not name:
+                if order.get('source') == 'pos':
+                    name = 'Walk-in Customer'
+                else:
+                    name = 'Web Customer'
+            
+            # Get email and phone
+            email = order.get('customer_email', 'N/A')
+            if not email or email == 'N/A':
+                customer = order.get('customer', {})
+                if isinstance(customer, dict):
+                    email = customer.get('email', 'N/A')
+            
+            phone = order.get('customer_phone', 'N/A')
+            if not phone or phone == 'N/A':
+                customer = order.get('customer', {})
+                if isinstance(customer, dict):
+                    phone = customer.get('phone', 'N/A')
+            
+            if name not in customer_list:
+                customer_list[name] = {
+                    'name': name,
+                    'email': email if email else 'N/A',
+                    'phone': phone if phone else 'N/A',
+                    'orders': 0,
+                    'total_spent': 0
+                }
+            customer_list[name]['orders'] += 1
+            customer_list[name]['total_spent'] += order.get('total', 0)
+        
+        # Show detailed order info for debugging
+        order_details = []
+        for o in orders[:5]:
+            order_details.append({
+                'order_id': o.get('order_id'),
+                'customer_name': o.get('customer_name'),
+                'customer_email': o.get('customer_email'),
+                'customer_phone': o.get('customer_phone'),
+                'source': o.get('source'),
+                'total': o.get('total')
+            })
+        
+        return jsonify({
+            'success': True,
+            'total_customers': len(customer_list),
+            'customers': list(customer_list.values()),
+            'total_orders': len(orders),
+            'raw_orders': order_details
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+
+@admin_bp.route('/admin/debug-db', methods=['GET'])
+def debug_db():
+    """Check what's actually in the database"""
+    if not session.get('admin_logged_in'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    try:
+        # Get the latest 5 orders
+        response = requests.get(
+            f"{Config.SUPABASE_URL}/rest/v1/orders?select=*&order=created_at.desc&limit=5",
+            headers=Config.SUPABASE_HEADERS,
+            timeout=10,
+        )
+        
+        if response.status_code == 200:
+            orders = response.json()
+            
+            # Extract relevant fields
+            result = []
+            for order in orders:
+                result.append({
+                    'order_id': order.get('order_id'),
+                    'customer_name': order.get('customer_name'),
+                    'customer': order.get('customer'),
+                    'customer_email': order.get('customer_email'),
+                    'customer_phone': order.get('customer_phone'),
+                    'source': order.get('source'),
+                    'created_at': order.get('created_at')
+                })
+            
+            return jsonify({
+                'success': True,
+                'total_orders': len(orders),
+                'orders': result
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': f'Status: {response.status_code}',
+                'text': response.text
+            })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
