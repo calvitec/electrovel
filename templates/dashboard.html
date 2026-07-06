@@ -733,14 +733,12 @@
         fetch('/admin/api/revenue')
             .then(function(response) { return response.json(); })
             .then(function(data) {
-                // Today's Revenue Card
                 var todayRevenue = document.getElementById('dashTodayRevenue');
                 if (todayRevenue) todayRevenue.textContent = 'KSh ' + formatNumber(data.today_revenue || 0);
                 
                 var yesterdayRevenue = document.getElementById('dashYesterdayRevenue');
                 if (yesterdayRevenue) yesterdayRevenue.textContent = formatNumber(data.yesterday_revenue || 0);
                 
-                // This Month's Revenue Card
                 var monthRevenue = document.getElementById('dashMonthRevenue');
                 if (monthRevenue) monthRevenue.textContent = 'KSh ' + formatNumber(data.month_revenue || 0);
                 
@@ -1040,35 +1038,55 @@
         }
     }
 
+    // ============================================================
+    // SAVE PRODUCT - UPDATED
+    // ============================================================
     function saveProduct(event) {
         event.preventDefault();
+        
+        console.log("🔴 SAVE PRODUCT CALLED");
+        
         var btn = document.getElementById('saveBtn');
+        if (!btn) {
+            console.error("❌ Save button not found!");
+            return;
+        }
+        
         var originalText = btn.innerHTML;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
         btn.disabled = true;
 
         var data = {
-            id: document.getElementById('prodId').value,
-            name: document.getElementById('prodName').value,
+            id: document.getElementById('prodId').value.trim(),
+            name: document.getElementById('prodName').value.trim(),
             category: document.getElementById('prodCategory').value,
-            price: parseFloat(document.getElementById('prodPrice').value),
+            price: parseFloat(document.getElementById('prodPrice').value) || 0,
             cost_price: parseFloat(document.getElementById('prodCost').value) || 0,
             original_price: parseFloat(document.getElementById('prodOriginal').value) || null,
-            stock: parseInt(document.getElementById('prodStock').value),
-            rating: parseFloat(document.getElementById('prodRating').value),
+            stock: parseInt(document.getElementById('prodStock').value) || 0,
+            rating: parseFloat(document.getElementById('prodRating').value) || 4.5,
             badge: document.getElementById('prodBadge').value,
-            image: document.getElementById('prodImage').value,
-            description: document.getElementById('prodDesc').value,
+            image: document.getElementById('prodImage').value.trim(),
+            description: document.getElementById('prodDesc').value.trim(),
             specs: document.getElementById('prodSpecs').value.split(',').map(function(s) { return s.trim(); }).filter(function(s) { return s; })
         };
 
+        console.log("📦 Sending product data:", data);
+
         fetch('/admin/products', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams(data)
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify(data)
         })
-        .then(function(response) { return response.json(); })
+        .then(function(response) {
+            console.log("📥 Response status:", response.status);
+            return response.json();
+        })
         .then(function(data) {
+            console.log("📥 Response data:", data);
             if (data && data.success) {
                 showToast('✅ Product saved successfully!');
                 setTimeout(function() { location.reload(); }, 1500);
@@ -1079,38 +1097,85 @@
             }
         })
         .catch(function(error) {
+            console.error("❌ Fetch error:", error);
             showToast('❌ Error: ' + error.message);
             btn.innerHTML = originalText;
             btn.disabled = false;
         });
     }
 
+    // ============================================================
+    // EDIT PRODUCT - UPDATED (NO DUPLICATES)
+    // ============================================================
     function editProduct(productId) {
+        console.log("✏️ Editing product:", productId);
         showToast('📦 Loading product data...');
+        
+        // Try to find the product in the existing table data
+        var row = document.querySelector(`.product-row[data-id="${productId}"]`);
+        if (row) {
+            var nameEl = row.querySelector('td:first-child .text-sm');
+            var categoryEl = row.querySelector('td:nth-child(2) .badge');
+            var priceEl = row.querySelector('td:nth-child(3)');
+            var costEl = row.querySelector('td:nth-child(4)');
+            var stockEl = row.querySelector('td:nth-child(6) .badge');
+            
+            var name = nameEl ? nameEl.textContent.trim() : '';
+            var category = categoryEl ? categoryEl.textContent.trim() : '';
+            var price = priceEl ? parseFloat(priceEl.textContent.replace('KSh ', '').replace(/,/g, '')) || 0 : 0;
+            var cost = costEl ? parseFloat(costEl.textContent.replace('KSh ', '').replace(/,/g, '')) || 0 : 0;
+            var stock = stockEl ? parseInt(stockEl.textContent) || 0 : 0;
+            
+            showSection('add-product');
+            document.getElementById('prodId').value = productId;
+            document.getElementById('prodName').value = name;
+            document.getElementById('prodCategory').value = category;
+            document.getElementById('prodPrice').value = price;
+            document.getElementById('prodCost').value = cost;
+            document.getElementById('prodStock').value = stock;
+            document.getElementById('prodRating').value = 4.5;
+            document.getElementById('prodBadge').value = '';
+            document.getElementById('prodImage').value = '';
+            document.getElementById('prodDesc').value = '';
+            document.getElementById('prodSpecs').value = '';
+            document.getElementById('saveBtn').innerHTML = '<i class="fas fa-save"></i> Update Product';
+            
+            showToast('✏️ Editing: ' + name);
+            return;
+        }
+        
+        // Fallback: Fetch from API
         fetch('/api/products/' + productId)
-            .then(function(r) { return r.json(); })
+            .then(function(r) { 
+                if (!r.ok) throw new Error('Product not found');
+                return r.json(); 
+            })
             .then(function(product) {
                 showSection('add-product');
-                document.getElementById('prodId').value = product.id;
-                document.getElementById('prodName').value = product.name;
-                document.getElementById('prodCategory').value = product.category;
-                document.getElementById('prodPrice').value = product.price;
-                document.getElementById('prodCost').value = product.cost_price;
-                document.getElementById('prodOriginal').value = product.original_price;
-                document.getElementById('prodStock').value = product.stock;
-                document.getElementById('prodRating').value = product.rating;
-                document.getElementById('prodBadge').value = product.badge;
-                document.getElementById('prodImage').value = product.image;
-                document.getElementById('prodDesc').value = product.description;
+                document.getElementById('prodId').value = product.id || '';
+                document.getElementById('prodName').value = product.name || '';
+                document.getElementById('prodCategory').value = product.category || '';
+                document.getElementById('prodPrice').value = product.price || 0;
+                document.getElementById('prodCost').value = product.cost_price || 0;
+                document.getElementById('prodOriginal').value = product.original_price || '';
+                document.getElementById('prodStock').value = product.stock || 0;
+                document.getElementById('prodRating').value = product.rating || 4.5;
+                document.getElementById('prodBadge').value = product.badge || '';
+                document.getElementById('prodImage').value = product.image || '';
+                document.getElementById('prodDesc').value = product.description || '';
                 document.getElementById('prodSpecs').value = (product.specs || []).join(', ');
                 document.getElementById('saveBtn').innerHTML = '<i class="fas fa-save"></i> Update Product';
-                showToast('✏️ Edit product: ' + product.name);
+                showToast('✏️ Edit product: ' + (product.name || ''));
             })
             .catch(function(err) {
+                console.error('Error loading product:', err);
                 showToast('❌ Error loading product: ' + err.message);
             });
     }
 
+    // ============================================================
+    // DELETE PRODUCT
+    // ============================================================
     function deleteProduct(productId) {
         if (!confirm('⚠️ Are you sure you want to delete this product?')) return;
         fetch('/admin/products/' + productId, { method: 'DELETE' })
@@ -1147,41 +1212,89 @@
         .catch(function(err) { showToast('❌ Error: ' + err.message); });
     }
 
+    // ============================================================
+    // VIEW ORDER - UPDATED (NO DUPLICATES)
+    // ============================================================
     function viewOrder(orderId) {
+        console.log("👁️ Viewing order:", orderId);
+        
         var modal = document.getElementById('orderModal');
         var details = document.getElementById('orderDetails');
+        
         if (!modal || !details) {
             showToast('⚠️ Order modal not found');
             return;
         }
-        details.innerHTML = '<p class="text-gray-400 text-center py-4"><i class="fas fa-spinner fa-spin mr-2"></i>Loading...</p>';
+        
+        details.innerHTML = '<p class="text-gray-400 text-center py-8"><i class="fas fa-spinner fa-spin mr-2"></i>Loading order details...</p>';
         modal.classList.remove('hidden');
 
         fetch('/api/orders/' + orderId)
-            .then(function(r) { return r.json(); })
+            .then(function(r) { 
+                if (!r.ok) throw new Error('Order not found');
+                return r.json(); 
+            })
             .then(function(order) {
-                var statusBadge = { 'pending': 'badge-warning', 'confirmed': 'badge-info', 'shipped': 'badge-purple', 'delivered': 'badge-success' }[order.status] || 'badge-warning';
+                console.log("📦 Order data:", order);
+                
+                var statusBadge = {
+                    'pending': 'badge-warning',
+                    'confirmed': 'badge-info', 
+                    'shipped': 'badge-purple',
+                    'delivered': 'badge-success',
+                    'cancelled': 'badge-danger'
+                }[order.status] || 'badge-warning';
+                
+                var statusLabel = {
+                    'pending': '⏳ Pending',
+                    'confirmed': '✅ Confirmed',
+                    'shipped': '📦 Shipped',
+                    'delivered': '🎯 Delivered',
+                    'cancelled': '❌ Cancelled'
+                }[order.status] || order.status || 'Pending';
+                
                 var itemsHtml = '';
-                for (var i = 0; i < (order.items || []).length; i++) {
-                    var item = order.items[i];
-                    itemsHtml += '<div class="flex justify-between items-center py-2 border-b border-gray-100/50 last:border-0">';
-                    itemsHtml += '<div><span class="font-medium text-sm">' + item.name + '</span><span class="text-xs text-gray-400 ml-2">× ' + item.quantity + '</span></div>';
-                    itemsHtml += '<span class="font-semibold text-sm">KSh ' + item.total + '</span>';
-                    itemsHtml += '</div>';
+                if (order.items && order.items.length > 0) {
+                    for (var i = 0; i < order.items.length; i++) {
+                        var item = order.items[i];
+                        var itemTotal = item.total || (item.price * item.quantity);
+                        itemsHtml += '<div class="flex justify-between items-center py-2 border-b border-gray-100/50 last:border-0">';
+                        itemsHtml += '<div><span class="font-medium text-sm">' + (item.name || 'Product') + '</span><span class="text-xs text-gray-400 ml-2">× ' + (item.quantity || 0) + '</span></div>';
+                        itemsHtml += '<span class="font-semibold text-sm">KSh ' + (itemTotal || 0).toLocaleString() + '</span>';
+                        itemsHtml += '</div>';
+                    }
+                } else {
+                    itemsHtml = '<p class="text-gray-400 text-sm">No items found</p>';
                 }
+                
+                var dateStr = 'N/A';
+                if (order.created_at) {
+                    try {
+                        var d = new Date(order.created_at);
+                        dateStr = d.toLocaleDateString('en-KE') + ' ' + d.toLocaleTimeString('en-KE', {hour: '2-digit', minute: '2-digit'});
+                    } catch(e) {
+                        dateStr = order.created_at.substring(0, 10);
+                    }
+                }
+                
                 details.innerHTML = 
-                    '<div class="detail-row"><span class="label">Order ID</span><span class="value font-mono">' + order.order_id + '</span></div>' +
+                    '<div class="detail-row"><span class="label">Order ID</span><span class="value font-mono font-bold">' + (order.order_id || 'N/A') + '</span></div>' +
                     '<div class="detail-row"><span class="label">Customer</span><span class="value font-semibold">' + (order.customer?.name || 'Customer') + '</span></div>' +
                     '<div class="detail-row"><span class="label">Email</span><span class="value">' + (order.customer?.email || 'N/A') + '</span></div>' +
                     '<div class="detail-row"><span class="label">Phone</span><span class="value">' + (order.customer?.phone || 'N/A') + '</span></div>' +
-                    '<div class="detail-row"><span class="label">Status</span><span class="value"><span class="badge ' + statusBadge + '">' + (order.status || 'Pending') + '</span></span></div>' +
-                    '<div class="detail-row"><span class="label">Date</span><span class="value">' + (order.created_at ? order.created_at.slice(0, 10) : 'N/A') + '</span></div>' +
+                    '<div class="detail-row"><span class="label">Address</span><span class="value">' + (order.customer?.address || 'N/A') + '</span></div>' +
+                    '<div class="detail-row"><span class="label">Source</span><span class="value"><span class="badge badge-info">' + (order.source || 'web') + '</span></span></div>' +
+                    '<div class="detail-row"><span class="label">Status</span><span class="value"><span class="badge ' + statusBadge + '">' + statusLabel + '</span></span></div>' +
+                    '<div class="detail-row"><span class="label">Date</span><span class="value">' + dateStr + '</span></div>' +
                     '<div class="detail-row" style="border-top:2px solid #2563eb;padding-top:12px;margin-top:4px;">' +
-                    '<span class="label font-bold text-[#0f172a]">Total</span><span class="value font-extrabold text-blue-600 text-lg">KSh ' + order.total + '</span></div>' +
+                    '<span class="label font-bold text-[#0f172a]">Total</span><span class="value font-extrabold text-blue-600 text-lg">KSh ' + (order.total || 0).toLocaleString() + '</span></div>' +
                     '<div style="margin-top:16px;padding-top:16px;border-top:1px solid #eef2f6;">' +
                     '<h4 class="font-bold text-[#0f172a] text-sm mb-3">Order Items</h4>' + itemsHtml + '</div>';
             })
-            .catch(function(err) { details.innerHTML = '<p class="text-red-500 text-center py-4">Error loading order: ' + err.message + '</p>'; });
+            .catch(function(err) {
+                console.error('Error loading order:', err);
+                details.innerHTML = '<p class="text-red-500 text-center py-4">❌ Error loading order: ' + err.message + '</p>';
+            });
     }
 
     // ============================================================
@@ -1272,7 +1385,6 @@
         setInterval(updateLiveStats, 30000);
         setInterval(loadEnhancedDashboardMetrics, 30000);
         
-        // Close modal on escape
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
                 var modal = document.getElementById('orderModal');
