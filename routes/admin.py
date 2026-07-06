@@ -360,12 +360,10 @@ def admin_pos_place_order():
             'status': 'confirmed',
             'source': 'pos',
             'created_at': datetime.utcnow().isoformat(),
-            # Customer fields directly in the table
             'customer_name': customer_name,
             'customer_email': customer_email,
             'customer_phone': customer_phone,
             'customer_address': customer_address,
-            # Customer as JSON for compatibility
             'customer': {
                 'name': customer_name,
                 'email': customer_email,
@@ -377,7 +375,6 @@ def admin_pos_place_order():
         print(f"🔥 SAVING ORDER WITH CUSTOMER NAME: {customer_name}")
         print(f"📦 Order ID: {order_id}")
 
-        # ===== SAVE DIRECTLY TO SUPABASE =====
         response = requests.post(
             f"{Config.SUPABASE_URL}/rest/v1/orders",
             headers=Config.SUPABASE_HEADERS,
@@ -388,7 +385,6 @@ def admin_pos_place_order():
         if response.status_code in [200, 201]:
             print(f"✅ Order saved successfully: {order_id}")
             
-            # Clear cache
             import utils.data
             utils.data.orders_cache = []
             
@@ -742,6 +738,162 @@ def calculate_analytics_from_orders(orders):
     }
 
 
+@admin_bp.route('/api/products/<product_id>', methods=['GET'])
+def api_get_product(product_id):
+    """Get a single product by ID for editing"""
+    if not session.get('admin_logged_in'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    try:
+        products = load_products()
+        for product in products:
+            if str(product.get('id')) == str(product_id):
+                return jsonify(product)
+        
+        return jsonify({'error': 'Product not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ============================================================
+# FIXED: ORDER API ENDPOINT
+# ============================================================
+@admin_bp.route('/api/orders/<order_id>', methods=['GET'])
+def api_get_order(order_id):
+    """Get a single order by ID for viewing"""
+    if not session.get('admin_logged_in'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    try:
+        orders = load_orders()
+        print(f"🔍 Looking for order: {order_id}")
+        
+        for order in orders:
+            if str(order.get('order_id')) == str(order_id):
+                print(f"✅ Found order: {order}")
+                
+                # ===== GET CUSTOMER DATA =====
+                customer = order.get('customer', {})
+                
+                # Handle string customer data
+                if isinstance(customer, str):
+                    try:
+                        if customer and customer.strip():
+                            customer = json.loads(customer)
+                        else:
+                            customer = {}
+                    except Exception as e:
+                        print(f"Error parsing customer JSON: {e}")
+                        customer = {}
+                
+                if isinstance(customer, list):
+                    customer = customer[0] if customer else {}
+                
+                if not isinstance(customer, dict):
+                    customer = {}
+                
+                # Get customer name from multiple sources
+                customer_name = customer.get('name', '')
+                if not customer_name:
+                    customer_name = order.get('customer_name', '')
+                if not customer_name:
+                    customer_name = 'Customer'
+                
+                customer_email = customer.get('email', '')
+                if not customer_email:
+                    customer_email = order.get('customer_email', 'N/A')
+                if not customer_email:
+                    customer_email = 'N/A'
+                
+                customer_phone = customer.get('phone', '')
+                if not customer_phone:
+                    customer_phone = order.get('customer_phone', 'N/A')
+                if not customer_phone:
+                    customer_phone = 'N/A'
+                
+                customer_address = customer.get('address', '')
+                if not customer_address:
+                    customer_address = order.get('customer_address', 'N/A')
+                if not customer_address:
+                    customer_address = 'N/A'
+                
+                # ===== GET ITEMS =====
+                items = order.get('items', [])
+                formatted_items = []
+                
+                if isinstance(items, str):
+                    try:
+                        items = json.loads(items)
+                    except:
+                        items = []
+                
+                if not isinstance(items, list):
+                    items = []
+                
+                for item in items:
+                    if not isinstance(item, dict):
+                        continue
+                    
+                    item_name = item.get('name', 'Product')
+                    item_quantity = item.get('quantity', 1)
+                    item_price = item.get('price', 0)
+                    item_total = item.get('total', 0)
+                    
+                    if item_total == 0 and item_price > 0 and item_quantity > 0:
+                        item_total = item_price * item_quantity
+                    
+                    formatted_items.append({
+                        'name': item_name,
+                        'quantity': item_quantity,
+                        'price': item_price,
+                        'total': item_total
+                    })
+                
+                # ===== GET STATUS =====
+                status = order.get('status', 'pending')
+                
+                # ===== GET DATE =====
+                created_at = order.get('created_at', '')
+                
+                # ===== GET TOTAL =====
+                total = order.get('total', 0)
+                if total == 0:
+                    for item in formatted_items:
+                        total += item.get('total', 0)
+                
+                # ===== GET SOURCE =====
+                source = order.get('source', 'web')
+                
+                # ===== BUILD RESPONSE =====
+                response_data = {
+                    'order_id': order.get('order_id', 'N/A'),
+                    'customer': {
+                        'name': customer_name,
+                        'email': customer_email,
+                        'phone': customer_phone,
+                        'address': customer_address,
+                    },
+                    'items': formatted_items,
+                    'subtotal': order.get('subtotal', 0),
+                    'shipping': order.get('shipping', 0),
+                    'total': total,
+                    'status': status,
+                    'created_at': created_at,
+                    'source': source,
+                }
+                
+                print(f"📦 Response data: {response_data}")
+                return jsonify(response_data)
+        
+        print(f"❌ Order not found: {order_id}")
+        return jsonify({'error': 'Order not found'}), 404
+        
+    except Exception as e:
+        print(f"❌ Error fetching order: {e}")
+        traceback.print_exc()
+        return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
+
+
 @admin_bp.route('/admin/upload-image', methods=['POST'])
 def upload_image():
     if not session.get('admin_logged_in'):
@@ -767,25 +919,33 @@ def admin_products():
         return jsonify({'success': False, 'message': 'Unauthorized'}), 401
 
     try:
-        product_id = request.form.get('id', '').strip()
+        if request.is_json:
+            data = request.get_json()
+        else:
+            data = {
+                'id': request.form.get('id', '').strip(),
+                'name': request.form.get('name', '').strip(),
+                'price': float(request.form.get('price', 0) or 0),
+                'cost_price': float(request.form.get('cost_price', 0) or 0),
+                'image': request.form.get('image', '').strip(),
+                'category': request.form.get('category', '').strip(),
+                'description': request.form.get('description', '').strip(),
+                'rating': float(request.form.get('rating', 4.0) or 4.0),
+                'reviews': int(request.form.get('reviews', 0) or 0),
+                'badge': request.form.get('badge', '').strip(),
+                'stock': int(request.form.get('stock', 0) or 0),
+                'original_price': float(request.form.get('original_price', 0) or 0) or None,
+                'specs': [s.strip() for s in request.form.get('specs', '').split(',') if s.strip()]
+            }
+        
+        product_id = data.get('id', '').strip()
         if not product_id:
             return jsonify({'success': False, 'message': 'Product ID is required'}), 400
         
-        product_data = {
-            'id': product_id,
-            'name': request.form.get('name', '').strip(),
-            'price': float(request.form.get('price', 0) or 0),
-            'cost_price': float(request.form.get('cost_price', 0) or 0),
-            'image': request.form.get('image', '').strip(),
-            'category': request.form.get('category', '').strip(),
-            'description': request.form.get('description', '').strip(),
-            'rating': float(request.form.get('rating', 4.0) or 4.0),
-            'reviews': int(request.form.get('reviews', 0) or 0),
-            'badge': request.form.get('badge', '').strip(),
-            'stock': int(request.form.get('stock', 0) or 0),
-            'original_price': float(request.form.get('original_price', 0) or 0) or None,
-            'specs': [s.strip() for s in request.form.get('specs', '').split(',') if s.strip()]
-        }
+        print("=" * 60)
+        print("📦 SAVING PRODUCT")
+        print(f"📋 Data received: {json.dumps(data, indent=2)}")
+        print("=" * 60)
         
         existing_products = load_products()
         product_exists = False
@@ -795,31 +955,38 @@ def admin_products():
                 break
         
         if product_exists:
+            print(f"🔄 Updating product: {product_id}")
             response = requests.patch(
                 f"{Config.SUPABASE_URL}/rest/v1/products?id=eq.{product_id}",
                 headers=Config.SUPABASE_HEADERS,
-                json=product_data,
-                timeout=5,
+                json=data,
+                timeout=10,
             )
             if response.status_code in [200, 204]:
+                print(f"✅ Product updated: {product_id}")
                 import utils.data
                 utils.data.products_cache = []
-                return jsonify({'success': True, 'message': 'Product updated successfully!', 'product': product_data})
-            return jsonify({'success': False, 'message': f'Error updating product: {response.status_code}'}), 500
+                return jsonify({'success': True, 'message': 'Product updated successfully!', 'product': data})
+            else:
+                print(f"❌ Update error: {response.status_code} - {response.text}")
+                return jsonify({'success': False, 'message': f'Error updating product: {response.status_code}'}), 500
         
+        print(f"🆕 Creating product: {product_id}")
         response = requests.post(
             f"{Config.SUPABASE_URL}/rest/v1/products",
             headers=Config.SUPABASE_HEADERS,
-            json=product_data,
-            timeout=5,
+            json=data,
+            timeout=10,
         )
         
         if response.status_code in [200, 201]:
+            print(f"✅ Product created: {product_id}")
             import utils.data
             utils.data.products_cache = []
-            return jsonify({'success': True, 'message': 'Product saved successfully!', 'product': product_data})
-        
-        return jsonify({'success': False, 'message': f'Error saving product: {response.status_code} - {response.text}'}), 500
+            return jsonify({'success': True, 'message': 'Product saved successfully!', 'product': data})
+        else:
+            print(f"❌ Create error: {response.status_code} - {response.text}")
+            return jsonify({'success': False, 'message': f'Error saving product: {response.status_code} - {response.text}'}), 500
         
     except Exception as exc:
         print(f'Product save error: {exc}')
@@ -939,11 +1106,9 @@ def debug_customers():
         for order in orders:
             name = None
             
-            # First try the direct customer_name column
             if order.get('customer_name'):
                 name = order.get('customer_name')
             
-            # If not found, try the customer JSON
             if not name:
                 customer = order.get('customer', {})
                 if isinstance(customer, dict):
@@ -955,20 +1120,17 @@ def debug_customers():
                     except:
                         pass
             
-            # If still not found, try email
             if not name:
                 email = order.get('customer_email')
                 if email and '@' in email:
                     name = email.split('@')[0]
             
-            # If still not found, use fallback
             if not name:
                 if order.get('source') == 'pos':
                     name = 'Walk-in Customer'
                 else:
                     name = 'Web Customer'
             
-            # Get email and phone
             email = order.get('customer_email', 'N/A')
             if not email or email == 'N/A':
                 customer = order.get('customer', {})
@@ -992,7 +1154,6 @@ def debug_customers():
             customer_list[name]['orders'] += 1
             customer_list[name]['total_spent'] += order.get('total', 0)
         
-        # Show detailed order info for debugging
         order_details = []
         for o in orders[:5]:
             order_details.append({
@@ -1027,7 +1188,6 @@ def debug_db():
         return jsonify({'error': 'Unauthorized'}), 401
     
     try:
-        # Get the latest 5 orders
         response = requests.get(
             f"{Config.SUPABASE_URL}/rest/v1/orders?select=*&order=created_at.desc&limit=5",
             headers=Config.SUPABASE_HEADERS,
@@ -1037,7 +1197,6 @@ def debug_db():
         if response.status_code == 200:
             orders = response.json()
             
-            # Extract relevant fields
             result = []
             for order in orders:
                 result.append({
