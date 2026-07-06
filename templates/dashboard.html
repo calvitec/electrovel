@@ -1,5 +1,5 @@
 <!-- ============================================================
-     DASHBOARD - COMPLETE & ENHANCED VERSION (FULLY FIXED)
+     DASHBOARD - CLEAN & PROFESSIONAL LAYOUT
      ============================================================ -->
 
 <!-- ===== DASHBOARD ===== -->
@@ -75,99 +75,67 @@
         </div>
     </div>
 
-    <!-- ===== STATS GRID - REVENUE CARD NOW SPANS 3 COLUMNS ===== -->
-    <div class="grid grid-cols-2 lg:grid-cols-7 gap-3 mb-8">
-        <!-- Total Products -->
-        <div class="stat-card animate-slide group" style="animation-delay: 0.05s; min-height: 110px; display: flex; flex-direction: column; justify-content: center; padding: 1rem 0.75rem; background: white; border-radius: 16px; border: 1px solid #eef2f6; box-shadow: 0 2px 6px rgba(0,0,0,0.02);">
-            <div class="flex items-center justify-between mb-1">
-                <div class="stat-icon bg-blue-50 text-blue-600 group-hover:bg-blue-100 transition-colors" style="width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                    <i class="fas fa-box" style="font-size: 0.85rem;"></i>
+    <!-- ===== STATS GRID - 4 CARD LAYOUT ===== -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        
+        <!-- Card 1: Today's Revenue -->
+        <div class="stat-card animate-slide group p-5 bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl shadow-sm relative overflow-hidden">
+            <div class="flex items-center justify-between mb-2">
+                <div class="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center">
+                    <i class="fas fa-calendar-day text-lg"></i>
                 </div>
-                <span class="text-xl font-black text-[#0f172a]" id="statProducts">{{ stats.total_products|default(0) }}</span>
+                <span id="todayGrowthBadge" class="text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                    <i class="fas fa-arrow-up mr-1"></i>0%
+                </span>
             </div>
-            <p class="stat-label" style="font-size: 0.6rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8;">Total Products</p>
-            <div class="mt-1.5 h-1 w-full bg-gray-100 rounded-full overflow-hidden">
-                <div class="h-full bg-blue-500 rounded-full transition-all duration-1000" style="width: {{ ((stats.total_products|default(0) / 100) * 100) if stats.total_products|default(0) > 0 else 0 }}%"></div>
-            </div>
+            <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">Today's Revenue</p>
+            <p class="text-2xl font-black text-slate-800 mt-1" id="dashTodayRevenue">KSh 0</p>
+            <p class="text-[10px] text-gray-400 mt-1">Vs. yesterday: KSh <span id="dashYesterdayRevenue">0</span></p>
         </div>
 
-        <!-- Bundles -->
-        <div class="stat-card animate-slide group" style="animation-delay: 0.1s; min-height: 110px; display: flex; flex-direction: column; justify-content: center; padding: 1rem 0.75rem; background: white; border-radius: 16px; border: 1px solid #eef2f6; box-shadow: 0 2px 6px rgba(0,0,0,0.02);">
-            <div class="flex items-center justify-between mb-1">
-                <div class="stat-icon bg-purple-50 text-purple-600 group-hover:bg-purple-100 transition-colors" style="width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                    <i class="fas fa-gift" style="font-size: 0.85rem;"></i>
+        <!-- Card 2: This Month's Revenue -->
+        <div class="stat-card animate-slide group p-5 bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100 rounded-2xl shadow-sm relative overflow-hidden">
+            <div class="flex items-center justify-between mb-2">
+                <div class="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
+                    <i class="fas fa-calendar-alt text-lg"></i>
                 </div>
-                <span class="text-xl font-black text-[#0f172a]" id="statBundles">{{ stats.total_bundles|default(0) }}</span>
+                <span id="monthGrowthBadge" class="text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                    <i class="fas fa-arrow-up mr-1"></i>0%
+                </span>
             </div>
-            <p class="stat-label" style="font-size: 0.6rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8;">Bundles</p>
-            <div class="mt-1.5 h-1 w-full bg-gray-100 rounded-full overflow-hidden">
-                <div class="h-full bg-purple-500 rounded-full transition-all duration-1000" style="width: {{ ((stats.total_bundles|default(0) / 50) * 100) if stats.total_bundles|default(0) > 0 else 0 }}%"></div>
-            </div>
+            <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">This Month</p>
+            <p class="text-2xl font-black text-slate-800 mt-1" id="dashMonthRevenue">KSh 0</p>
+            <p class="text-[10px] text-gray-400 mt-1">Last Month: KSh <span id="dashLastMonthRevenue">0</span></p>
         </div>
 
-        <!-- Total Orders -->
-        <div class="stat-card animate-slide group" style="animation-delay: 0.15s; min-height: 110px; display: flex; flex-direction: column; justify-content: center; padding: 1rem 0.75rem; background: white; border-radius: 16px; border: 1px solid #eef2f6; box-shadow: 0 2px 6px rgba(0,0,0,0.02);">
-            <div class="flex items-center justify-between mb-1">
-                <div class="stat-icon bg-yellow-50 text-yellow-600 group-hover:bg-yellow-100 transition-colors" style="width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                    <i class="fas fa-shopping-bag" style="font-size: 0.85rem;"></i>
+        <!-- Card 3: Total Products -->
+        <div class="stat-card animate-slide group p-5 bg-gradient-to-br from-purple-50 to-fuchsia-50 border border-purple-100 rounded-2xl shadow-sm relative overflow-hidden">
+            <div class="flex items-center justify-between mb-2">
+                <div class="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-600 flex items-center justify-center">
+                    <i class="fas fa-box text-lg"></i>
                 </div>
-                <span class="text-xl font-black text-[#0f172a]" id="statOrders">{{ stats.total_orders|default(0) }}</span>
+                <span class="text-[10px] font-semibold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">Inventory</span>
             </div>
-            <p class="stat-label" style="font-size: 0.6rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8;">Total Orders</p>
-            <span class="stat-change mt-1 inline-block" style="font-size: 0.55rem; font-weight: 600; padding: 1px 8px; border-radius: 9999px; background: #fef3c7; color: #d97706; display: inline-block; text-align: center; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                {{ stats.pending_orders|default(0) }} pending
-                {% if stats.pending_orders|default(0) > 0 %}
-                <span class="animate-pulse">🔴</span>
-                {% endif %}
-            </span>
+            <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">Total Products</p>
+            <p class="text-2xl font-black text-purple-700 mt-1" id="dashTotalProducts">{{ stats.total_products|default(0) }}</p>
+            <p class="text-[10px] text-gray-400 mt-1">Bundles: <span id="dashTotalBundles">{{ stats.total_bundles|default(0) }}</span></p>
         </div>
 
-        <!-- Low Stock -->
-        <div class="stat-card animate-slide group" style="animation-delay: 0.2s; min-height: 110px; display: flex; flex-direction: column; justify-content: center; padding: 1rem 0.75rem; background: white; border-radius: 16px; border: 1px solid #eef2f6; box-shadow: 0 2px 6px rgba(0,0,0,0.02);">
-            <div class="flex items-center justify-between mb-1">
-                <div class="stat-icon bg-red-50 text-red-600 group-hover:bg-red-100 transition-colors" style="width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                    <i class="fas fa-exclamation-triangle" style="font-size: 0.85rem;"></i>
+        <!-- Card 4: Total Orders -->
+        <div class="stat-card animate-slide group p-5 bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-100 rounded-2xl shadow-sm relative overflow-hidden">
+            <div class="flex items-center justify-between mb-2">
+                <div class="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center">
+                    <i class="fas fa-shopping-bag text-lg"></i>
                 </div>
-                <span class="text-xl font-black text-[#0f172a]" id="statLowStock">{{ stats.low_stock|default(0) }}</span>
+                <span class="text-[10px] font-semibold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full" id="dashPendingBadge">
+                    {{ stats.pending_orders|default(0) }} pending
+                </span>
             </div>
-            <p class="stat-label" style="font-size: 0.6rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8;">Low Stock Items</p>
-            {% if stats.low_stock|default(0) > 0 %}
-            <span class="text-[0.55rem] text-red-500 font-semibold mt-0.5 inline-block animate-pulse">⚠️ Needs attention</span>
-            {% endif %}
+            <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">Total Orders</p>
+            <p class="text-2xl font-black text-amber-700 mt-1" id="dashTotalOrders">{{ stats.total_orders|default(0) }}</p>
+            <p class="text-[10px] text-gray-400 mt-1">Low Stock: <span id="dashLowStock">{{ stats.low_stock|default(0) }}</span> items</p>
         </div>
 
-        <!-- ===== TOTAL REVENUE - NOW SPANS 3 COLUMNS ===== -->
-        <div class="stat-card animate-slide group lg:col-span-3" style="animation-delay: 0.25s; min-height: 110px; display: flex; flex-direction: column; justify-content: center; padding: 1rem 1.5rem; background: linear-gradient(135deg, #f0fdf4, #dcfce7); border-radius: 16px; border: 1px solid #bbf7d0; box-shadow: 0 2px 12px rgba(34,197,94,0.08); position: relative; overflow: hidden;">
-            <div style="position: absolute; right: -20px; top: -20px; width: 80px; height: 80px; background: rgba(34,197,94,0.05); border-radius: 50%;"></div>
-            <div style="position: absolute; left: -30px; bottom: -30px; width: 60px; height: 60px; background: rgba(34,197,94,0.04); border-radius: 50%;"></div>
-            
-            <div class="flex items-center justify-between mb-1" style="position: relative; z-index: 1;">
-                <div class="stat-icon bg-green-500/20 text-green-600 group-hover:bg-green-500/30 transition-colors" style="width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                    <i class="fas fa-coin" style="font-size: 1.2rem;"></i>
-                </div>
-                <span class="stat-value text-[#0f172a]" id="dashRevenue" style="font-size: 2rem; font-weight: 900; line-height: 1.1; white-space: nowrap; text-align: right; flex: 1; margin-left: 12px; overflow: visible; min-width: 0; color: #15803d;">KSh 0</span>
-            </div>
-            <p class="stat-label" style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #15803d; position: relative; z-index: 1;">Total Revenue</p>
-            <div class="mt-1.5 h-1.5 w-full bg-green-200 rounded-full overflow-hidden" style="position: relative; z-index: 1;">
-                <div class="h-full bg-gradient-to-r from-green-500 to-emerald-400 rounded-full transition-all duration-1000" style="width: 85%"></div>
-            </div>
-        </div>
-
-        <!-- Total Customers -->
-        <div class="stat-card animate-slide group" style="animation-delay: 0.3s; min-height: 110px; display: flex; flex-direction: column; justify-content: center; padding: 1rem 0.75rem; background: white; border-radius: 16px; border: 1px solid #eef2f6; box-shadow: 0 2px 6px rgba(0,0,0,0.02);">
-            <div class="flex items-center justify-between mb-1">
-                <div class="stat-icon bg-indigo-50 text-indigo-600 group-hover:bg-indigo-100 transition-colors" style="width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                    <i class="fas fa-users" style="font-size: 0.85rem;"></i>
-                </div>
-                <span class="text-xl font-black text-[#0f172a]" id="statCustomers">{{ stats.total_customers|default(0) }}</span>
-            </div>
-            <p class="stat-label" style="font-size: 0.6rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8;">Total Customers</p>
-            <div class="mt-1.5 h-1 w-full bg-gray-100 rounded-full overflow-hidden">
-                {% set customer_pct = (stats.total_customers|default(0)) * 2 %}
-                {% if customer_pct > 100 %}{% set customer_pct = 100 %}{% endif %}
-                <div class="h-full bg-indigo-500 rounded-full transition-all duration-1000" style="width: {{ customer_pct }}%"></div>
-            </div>
-        </div>
     </div>
 
     <!-- ===== CHARTS SECTION ===== -->
@@ -232,7 +200,7 @@
 </div>
 
 <!-- ============================================================
-     ANALYTICS - COMPLETE
+     ANALYTICS SECTION - CLEAN & PROFESSIONAL
      ============================================================ -->
 <div id="analytics-section" class="section hidden">
     <div class="flex items-center justify-between mb-8">
@@ -252,45 +220,89 @@
         </div>
     </div>
     
-    <!-- ===== SUMMARY STATS ===== -->
+    <!-- ===== SUMMARY STATS - CLEAN 4 CARD LAYOUT ===== -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <div class="stat-card group" style="border-left: 4px solid #22c55e; min-height: 100px; display: flex; flex-direction: column; justify-content: center; padding: 1.25rem;">
-            <p class="stat-label" style="font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8;">Revenue</p>
-            <p class="stat-value text-green-600" id="totalRevenue" style="font-size: 1.5rem; font-weight: 800; word-break: break-word;">KSh 0</p>
+        <div class="stat-card group p-5 bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200/50 rounded-2xl shadow-sm hover:shadow-md transition-all">
+            <div class="flex items-center gap-2 mb-1">
+                <div class="w-8 h-8 rounded-lg bg-green-500/10 text-green-600 flex items-center justify-center">
+                    <i class="fas fa-coin text-sm"></i>
+                </div>
+                <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">Revenue</p>
+            </div>
+            <p class="text-2xl font-extrabold text-green-600" id="totalRevenue">KSh 0</p>
+            <p class="text-[10px] text-gray-400 mt-0.5">Total sales amount</p>
         </div>
-        <div class="stat-card group" style="border-left: 4px solid #3b82f6; min-height: 100px; display: flex; flex-direction: column; justify-content: center; padding: 1.25rem;">
-            <p class="stat-label" style="font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8;">Cost</p>
-            <p class="stat-value text-blue-600" id="totalCost" style="font-size: 1.5rem; font-weight: 800; word-break: break-word;">KSh 0</p>
+
+        <div class="stat-card group p-5 bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-200/50 rounded-2xl shadow-sm hover:shadow-md transition-all">
+            <div class="flex items-center gap-2 mb-1">
+                <div class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-600 flex items-center justify-center">
+                    <i class="fas fa-shopping-bag text-sm"></i>
+                </div>
+                <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">Cost</p>
+            </div>
+            <p class="text-2xl font-extrabold text-blue-600" id="totalCost">KSh 0</p>
+            <p class="text-[10px] text-gray-400 mt-0.5">Total cost of goods sold</p>
         </div>
-        <div class="stat-card group" style="border-left: 4px solid #8b5cf6; min-height: 100px; display: flex; flex-direction: column; justify-content: center; padding: 1.25rem;">
-            <p class="stat-label" style="font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8;">Profit</p>
-            <p class="stat-value text-purple-600" id="totalProfit" style="font-size: 1.5rem; font-weight: 800; word-break: break-word;">KSh 0</p>
+
+        <div class="stat-card group p-5 bg-gradient-to-br from-purple-50 to-violet-50 border border-purple-200/50 rounded-2xl shadow-sm hover:shadow-md transition-all">
+            <div class="flex items-center gap-2 mb-1">
+                <div class="w-8 h-8 rounded-lg bg-purple-500/10 text-purple-600 flex items-center justify-center">
+                    <i class="fas fa-chart-line text-sm"></i>
+                </div>
+                <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">Profit</p>
+            </div>
+            <p class="text-2xl font-extrabold text-purple-600" id="totalProfit">KSh 0</p>
+            <p class="text-[10px] text-gray-400 mt-0.5">Revenue - Cost</p>
         </div>
-        <div class="stat-card group" style="border-left: 4px solid #f59e0b; min-height: 100px; display: flex; flex-direction: column; justify-content: center; padding: 1.25rem;">
-            <p class="stat-label" style="font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8;">Orders</p>
-            <p class="stat-value text-yellow-600" id="totalOrders" style="font-size: 1.5rem; font-weight: 800; word-break: break-word;">0</p>
+
+        <div class="stat-card group p-5 bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200/50 rounded-2xl shadow-sm hover:shadow-md transition-all">
+            <div class="flex items-center gap-2 mb-1">
+                <div class="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-600 flex items-center justify-center">
+                    <i class="fas fa-shopping-cart text-sm"></i>
+                </div>
+                <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">Orders</p>
+            </div>
+            <p class="text-2xl font-extrabold text-amber-600" id="totalOrders">0</p>
+            <p class="text-[10px] text-gray-400 mt-0.5">Total customer orders</p>
         </div>
     </div>
 
-    <!-- ===== PROFIT OVERVIEW ===== -->
+    <!-- ===== PROFIT OVERVIEW - CLEAN CARD ===== -->
     <div class="glass-card mb-6 animate-fade">
         <h3 class="font-bold text-[#0f172a] text-lg mb-4">
             <i class="fas fa-chart-line text-blue-500 mr-2"></i>Profit Overview
         </h3>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div class="bg-gradient-to-br from-green-50 to-emerald-50 p-5 rounded-2xl border border-green-200/50 hover:shadow-lg transition-shadow">
-                <p class="text-sm text-gray-500 font-medium">Revenue</p>
-                <p class="text-2xl font-extrabold text-green-600" id="revRevenue" style="word-break: break-word;">KSh 0</p>
+            <div class="bg-gradient-to-br from-green-50 to-emerald-50 p-6 rounded-2xl border border-green-200/50 hover:shadow-lg transition-shadow text-center">
+                <div class="flex items-center justify-center gap-2 mb-2">
+                    <div class="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
+                        <i class="fas fa-arrow-up text-green-600 text-sm"></i>
+                    </div>
+                    <p class="text-sm font-semibold text-gray-500">Revenue</p>
+                </div>
+                <p class="text-3xl font-extrabold text-green-600" id="revRevenue">KSh 0</p>
                 <p class="text-xs text-gray-400 mt-1">Total sales amount</p>
             </div>
-            <div class="bg-gradient-to-br from-purple-50 to-violet-50 p-5 rounded-2xl border border-purple-200/50 hover:shadow-lg transition-shadow">
-                <p class="text-sm text-gray-500 font-medium">Profit</p>
-                <p class="text-2xl font-extrabold text-purple-600" id="revProfit" style="word-break: break-word;">KSh 0</p>
+
+            <div class="bg-gradient-to-br from-purple-50 to-violet-50 p-6 rounded-2xl border border-purple-200/50 hover:shadow-lg transition-shadow text-center">
+                <div class="flex items-center justify-center gap-2 mb-2">
+                    <div class="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center">
+                        <i class="fas fa-coins text-purple-600 text-sm"></i>
+                    </div>
+                    <p class="text-sm font-semibold text-gray-500">Profit</p>
+                </div>
+                <p class="text-3xl font-extrabold text-purple-600" id="revProfit">KSh 0</p>
                 <p class="text-xs text-gray-400 mt-1">Revenue - Cost</p>
             </div>
-            <div class="bg-gradient-to-br from-blue-50 to-cyan-50 p-5 rounded-2xl border border-blue-200/50 hover:shadow-lg transition-shadow">
-                <p class="text-sm text-gray-500 font-medium">Profit Margin</p>
-                <p class="text-2xl font-extrabold text-blue-600" id="profitMargin">0%</p>
+
+            <div class="bg-gradient-to-br from-blue-50 to-cyan-50 p-6 rounded-2xl border border-blue-200/50 hover:shadow-lg transition-shadow text-center">
+                <div class="flex items-center justify-center gap-2 mb-2">
+                    <div class="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center">
+                        <i class="fas fa-percent text-blue-600 text-sm"></i>
+                    </div>
+                    <p class="text-sm font-semibold text-gray-500">Profit Margin</p>
+                </div>
+                <p class="text-3xl font-extrabold text-blue-600" id="profitMargin">0%</p>
                 <p class="text-xs text-gray-400 mt-1">(Profit ÷ Revenue) × 100</p>
             </div>
         </div>
@@ -307,12 +319,22 @@
         <div class="table-wrap">
             <table>
                 <thead>
-                    <tr><th>Month</th><th class="text-right">Orders</th><th class="text-right">Items</th><th class="text-right">Revenue</th><th class="text-right">Cost</th><th class="text-right">Profit</th><th class="text-right">Margin</th></tr>
+                    <tr>
+                        <th>Month</th>
+                        <th class="text-right">Orders</th>
+                        <th class="text-right">Items</th>
+                        <th class="text-right">Revenue</th>
+                        <th class="text-right">Cost</th>
+                        <th class="text-right">Profit</th>
+                        <th class="text-right">Margin</th>
+                    </tr>
                 </thead>
                 <tbody id="monthlyTable">
-                    <tr><td colspan="7" class="text-center py-8 text-gray-400">
-                        <i class="fas fa-spinner fa-spin mr-2"></i>Loading...
-                    </td></tr>
+                    <tr>
+                        <td colspan="7" class="text-center py-8 text-gray-400">
+                            <i class="fas fa-spinner fa-spin mr-2"></i>Loading...
+                        </td>
+                    </tr>
                 </tbody>
             </table>
         </div>
@@ -329,12 +351,21 @@
         <div class="table-wrap">
             <table>
                 <thead>
-                    <tr><th>Product</th><th class="text-right">Qty</th><th class="text-right">Revenue</th><th class="text-right">Cost</th><th class="text-right">Profit</th><th class="text-right">Margin</th></tr>
+                    <tr>
+                        <th>Product</th>
+                        <th class="text-right">Qty</th>
+                        <th class="text-right">Revenue</th>
+                        <th class="text-right">Cost</th>
+                        <th class="text-right">Profit</th>
+                        <th class="text-right">Margin</th>
+                    </tr>
                 </thead>
                 <tbody id="productTable">
-                    <tr><td colspan="6" class="text-center py-8 text-gray-400">
-                        <i class="fas fa-spinner fa-spin mr-2"></i>Loading...
-                    </td></tr>
+                    <tr>
+                        <td colspan="6" class="text-center py-8 text-gray-400">
+                            <i class="fas fa-spinner fa-spin mr-2"></i>Loading...
+                        </td>
+                    </tr>
                 </tbody>
             </table>
         </div>
@@ -342,7 +373,7 @@
 </div>
 
 <!-- ============================================================
-     PRODUCTS - COMPLETE
+     PRODUCTS SECTION
      ============================================================ -->
 <div id="products-section" class="section hidden">
     <div class="flex items-center justify-between mb-8">
@@ -357,7 +388,6 @@
         </button>
     </div>
     
-    <!-- ===== PRODUCT SEARCH ===== -->
     <div class="mb-4">
         <div class="relative max-w-md">
             <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
@@ -418,7 +448,7 @@
 </div>
 
 <!-- ============================================================
-     ADD PRODUCT - COMPLETE
+     ADD PRODUCT SECTION
      ============================================================ -->
 <div id="add-product-section" class="section hidden">
     <div class="flex items-center justify-between mb-8">
@@ -527,7 +557,7 @@
 </div>
 
 <!-- ============================================================
-     ORDERS - COMPLETE
+     ORDERS SECTION
      ============================================================ -->
 <div id="orders-section" class="section hidden">
     <div class="flex items-center justify-between mb-8">
@@ -590,7 +620,7 @@
 </div>
 
 <!-- ============================================================
-     CUSTOMERS - COMPLETE
+     CUSTOMERS SECTION
      ============================================================ -->
 <div id="customers-section" class="section hidden">
     <div class="flex items-center justify-between mb-8">
@@ -635,176 +665,10 @@
     </div>
 </div>
 
-<!-- ===== ADDITIONAL STYLES ===== -->
-<style>
-    /* ===== SQUEEZED SIDEBAR ===== */
-    .sidebar {
-        padding: 12px 8px !important;
-        min-width: 160px !important;
-        max-width: 180px !important;
-    }
-    .sidebar-item {
-        padding: 8px 10px !important;
-        font-size: 0.7rem !important;
-        gap: 6px !important;
-        border-radius: 10px !important;
-    }
-    .sidebar-item i {
-        font-size: 0.85rem !important;
-        width: 16px !important;
-    }
-    .sidebar-item .badge-count {
-        font-size: 0.5rem !important;
-        padding: 1px 6px !important;
-    }
-    .sidebar .mb-4 {
-        margin-bottom: 8px !important;
-    }
-    .sidebar .pb-4 {
-        padding-bottom: 8px !important;
-    }
-    
-    /* ===== LARGER REVENUE CARD - 3 COLUMNS ===== */
-    .lg\:col-span-3 {
-        grid-column: span 3 !important;
-    }
-    
-    #dashRevenue {
-        font-size: 2rem !important;
-        font-weight: 900 !important;
-        white-space: nowrap !important;
-        overflow: visible !important;
-        max-width: 100% !important;
-        display: block !important;
-        text-align: right !important;
-        color: #15803d !important;
-        letter-spacing: -0.02em !important;
-    }
-    
-    /* ===== ALL STAT CARDS ===== */
-    .stat-card {
-        min-height: 110px !important;
-        padding: 1rem 0.75rem !important;
-        background: white !important;
-        border-radius: 16px !important;
-        border: 1px solid #eef2f6 !important;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.02) !important;
-        display: flex !important;
-        flex-direction: column !important;
-        justify-content: center !important;
-        transition: all 0.3s ease !important;
-    }
-    
-    .stat-card:hover {
-        border-color: #cbd5e1 !important;
-        box-shadow: 0 8px 20px rgba(0,0,0,0.04) !important;
-        transform: translateY(-2px) !important;
-    }
-    
-    .stat-card .stat-value {
-        font-size: 1.2rem !important;
-        line-height: 1.1 !important;
-    }
-    
-    /* ===== RESPONSIVE ===== */
-    @media (max-width: 640px) {
-        .stat-card {
-            min-height: 95px !important;
-            padding: 0.65rem 0.5rem !important;
-            border-radius: 12px !important;
-        }
-        .stat-card .stat-value {
-            font-size: 1rem !important;
-        }
-        #dashRevenue {
-            font-size: 1.2rem !important;
-        }
-        .stat-card .stat-icon {
-            width: 28px !important;
-            height: 28px !important;
-            border-radius: 8px !important;
-        }
-        .stat-card .stat-icon i {
-            font-size: 0.7rem !important;
-        }
-        .stat-card .stat-label {
-            font-size: 0.5rem !important;
-        }
-        .lg\:col-span-3 {
-            grid-column: span 2 !important;
-        }
-        .sidebar {
-            padding: 8px 4px !important;
-            min-width: 120px !important;
-        }
-        .sidebar-item {
-            padding: 6px 8px !important;
-            font-size: 0.6rem !important;
-            gap: 4px !important;
-        }
-        .sidebar-item i {
-            font-size: 0.7rem !important;
-            width: 14px !important;
-        }
-    }
-    
-    @media (min-width: 641px) and (max-width: 1024px) {
-        #dashRevenue {
-            font-size: 1.6rem !important;
-        }
-        .stat-card {
-            min-height: 105px !important;
-        }
-        .lg\:col-span-3 {
-            grid-column: span 2 !important;
-        }
-    }
-    
-    /* ===== GRID FIX ===== */
-    .grid-cols-7 {
-        grid-template-columns: repeat(7, 1fr) !important;
-    }
-    
-    @media (max-width: 1024px) {
-        .grid-cols-7 {
-            grid-template-columns: repeat(3, 1fr) !important;
-        }
-    }
-    
-    @media (max-width: 640px) {
-        .grid-cols-7 {
-            grid-template-columns: repeat(2, 1fr) !important;
-        }
-    }
-</style>
-
 <!-- ============================================================
-     SCRIPTS - ALL FUNCTIONS
+     SCRIPTS
      ============================================================ -->
 <script>
-    // ============================================================
-    // DASHBOARD REVENUE UPDATE
-    // ============================================================
-    function loadDashboardRevenue() {
-        fetch('/admin/api/revenue')
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                var el = document.getElementById('dashRevenue');
-                if (el) {
-                    var formatted = 'KSh ' + formatNumber(data.total_revenue || 0);
-                    el.textContent = formatted;
-                    var liveEl = document.getElementById('liveRevenue');
-                    if (liveEl) liveEl.textContent = formatted;
-                }
-                var revEl = document.getElementById('totalRevenue');
-                if (revEl) revEl.textContent = 'KSh ' + formatNumber(data.total_revenue || 0);
-            })
-            .catch(function() {
-                var el = document.getElementById('dashRevenue');
-                if (el) el.textContent = 'KSh 0';
-            });
-    }
-
     // ============================================================
     // FORMAT NUMBER
     // ============================================================
@@ -835,7 +699,57 @@
         if (section === 'dashboard') {
             setTimeout(loadDashboardRevenue, 100);
             setTimeout(loadDashboardCharts, 300);
+            setTimeout(loadEnhancedDashboardMetrics, 400);
         }
+    }
+
+    // ============================================================
+    // DASHBOARD REVENUE UPDATE
+    // ============================================================
+    function loadDashboardRevenue() {
+        fetch('/admin/api/revenue')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var el = document.getElementById('dashRevenue');
+                if (el) {
+                    var formatted = 'KSh ' + formatNumber(data.total_revenue || 0);
+                    el.textContent = formatted;
+                    var liveEl = document.getElementById('liveRevenue');
+                    if (liveEl) liveEl.textContent = formatted;
+                }
+                var revEl = document.getElementById('totalRevenue');
+                if (revEl) revEl.textContent = 'KSh ' + formatNumber(data.total_revenue || 0);
+            })
+            .catch(function() {
+                var el = document.getElementById('dashRevenue');
+                if (el) el.textContent = 'KSh 0';
+            });
+    }
+
+    // ============================================================
+    // ENHANCED DASHBOARD METRICS UPDATE
+    // ============================================================
+    function loadEnhancedDashboardMetrics() {
+        fetch('/admin/api/revenue')
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                // Today's Revenue Card
+                var todayRevenue = document.getElementById('dashTodayRevenue');
+                if (todayRevenue) todayRevenue.textContent = 'KSh ' + formatNumber(data.today_revenue || 0);
+                
+                var yesterdayRevenue = document.getElementById('dashYesterdayRevenue');
+                if (yesterdayRevenue) yesterdayRevenue.textContent = formatNumber(data.yesterday_revenue || 0);
+                
+                // This Month's Revenue Card
+                var monthRevenue = document.getElementById('dashMonthRevenue');
+                if (monthRevenue) monthRevenue.textContent = 'KSh ' + formatNumber(data.month_revenue || 0);
+                
+                var lastMonthRevenue = document.getElementById('dashLastMonthRevenue');
+                if (lastMonthRevenue) lastMonthRevenue.textContent = formatNumber(data.last_month_revenue || 0);
+            })
+            .catch(function(err) {
+                console.error('Error loading enhanced dashboard metrics:', err);
+            });
     }
 
     // ============================================================
@@ -1351,10 +1265,12 @@
             loadDashboardCharts();
             loadAnalytics();
             loadDashboardRevenue();
+            loadEnhancedDashboardMetrics();
         }, 300);
         
         updateLiveStats();
         setInterval(updateLiveStats, 30000);
+        setInterval(loadEnhancedDashboardMetrics, 30000);
         
         // Close modal on escape
         document.addEventListener('keydown', function(e) {
