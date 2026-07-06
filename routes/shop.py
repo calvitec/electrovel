@@ -1,5 +1,7 @@
 import traceback
 from datetime import datetime
+import json
+import requests
 
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, session, url_for
 from werkzeug.utils import secure_filename
@@ -325,23 +327,62 @@ def checkout_page():
         return redirect(url_for('shop.index'))
 
 
+# ============================================================
+# FIXED: /place-order ENDPOINT - SAVES CUSTOMER DATA
+# ============================================================
 @shop_bp.route('/place-order', methods=['POST'])
 def place_order():
     try:
         cart = get_cart()
         if not cart:
-            return jsonify({'success': False, 'message': 'Cart is empty'})
+            return jsonify({'success': False, 'message': 'Cart is empty'}), 400
 
-        if request.is_json:
-            data = request.get_json()
-        else:
+        # ===== GET DATA FROM REQUEST =====
+        data = request.get_json()
+        if not data:
             data = {
-                'customer_name': request.form.get('customer_name', 'Customer'),
-                'customer_email': request.form.get('customer_email', 'customer@example.com'),
-                'customer_phone': request.form.get('customer_phone', 'N/A'),
-                'customer_address': request.form.get('customer_address', 'N/A'),
+                'customer_name': request.form.get('customer_name', ''),
+                'customer_email': request.form.get('customer_email', ''),
+                'customer_phone': request.form.get('customer_phone', ''),
+                'customer_address': request.form.get('customer_address', ''),
             }
 
+        print("=" * 60)
+        print("📦 PLACE ORDER REQUEST")
+        print(f"📋 Data received: {data}")
+        print("=" * 60)
+
+        # ===== GET CUSTOMER DATA =====
+        customer_name = data.get('customer_name', '')
+        if not customer_name:
+            customer_name = data.get('name', '')
+        if not customer_name:
+            customer_name = 'Web Customer'
+
+        customer_email = data.get('customer_email', '')
+        if not customer_email:
+            customer_email = data.get('email', '')
+        if not customer_email:
+            customer_email = 'web@example.com'
+
+        customer_phone = data.get('customer_phone', '')
+        if not customer_phone:
+            customer_phone = data.get('phone', '')
+        if not customer_phone:
+            customer_phone = 'N/A'
+
+        customer_address = data.get('customer_address', '')
+        if not customer_address:
+            customer_address = data.get('address', '')
+        if not customer_address:
+            customer_address = 'Online Order'
+
+        print(f"👤 Customer: {customer_name}")
+        print(f"📧 Email: {customer_email}")
+        print(f"📱 Phone: {customer_phone}")
+        print("=" * 60)
+
+        # ===== BUILD ORDER ITEMS =====
         subtotal = 0
         products = load_products()
         bundles = load_bundles()
@@ -392,11 +433,10 @@ def place_order():
         shipping = 0 if subtotal >= 50000 else 800
         total = subtotal + shipping
         order_id = f'ELEC-{datetime.utcnow().strftime("%Y%m%d%H%M%S")}'
-        customer_name = data.get('customer_name', 'Customer')
-        customer_email = data.get('customer_email', 'customer@example.com')
-        customer_phone = data.get('customer_phone', 'N/A')
-        customer_address = data.get('customer_address', 'N/A')
 
+        # ============================================================
+        # CRITICAL FIX: Build order data with customer fields
+        # ============================================================
         order_data = {
             'order_id': order_id,
             'items': order_items,
@@ -406,27 +446,54 @@ def place_order():
             'status': 'pending',
             'source': 'web',
             'created_at': datetime.utcnow().isoformat(),
+            # ===== CUSTOMER DATA AS DIRECT FIELDS =====
+            'customer_name': customer_name,
+            'customer_email': customer_email,
+            'customer_phone': customer_phone,
+            'customer_address': customer_address,
+            # ===== CUSTOMER DATA AS JSON (backup) =====
             'customer': {
                 'name': customer_name,
                 'email': customer_email,
                 'phone': customer_phone,
                 'address': customer_address,
-            },
+            }
         }
 
-        save_result = save_order_to_supabase(order_data)
-        if save_result.get('success'):
+        print(f"🔥 SAVING WEB ORDER: {customer_name}")
+        print(f"📦 Order data: {json.dumps(order_data, indent=2)}")
+
+        # ===== SAVE DIRECTLY TO SUPABASE =====
+        response = requests.post(
+            f"{Config.SUPABASE_URL}/rest/v1/orders",
+            headers=Config.SUPABASE_HEADERS,
+            json=order_data,
+            timeout=10,
+        )
+
+        if response.status_code in [200, 201]:
+            print(f"✅ Web order saved: {order_id}")
             session['cart'] = {}
             session.modified = True
+
+            # Clear cache
+            import utils.data
+            utils.data.orders_cache = []
+
             return jsonify({
                 'success': True,
                 'order_id': order_id,
                 'total': total,
-                'message': save_result.get('message', 'Order placed successfully!'),
-                'queued': save_result.get('queued', False),
-                'synced': save_result.get('synced', False),
+                'message': 'Order placed successfully!',
+                'customer_name': customer_name,  # Return for debugging
             })
-        return jsonify({'success': False, 'message': save_result.get('message', 'Failed to save order')}), 500
+        else:
+            print(f"❌ Supabase error: {response.status_code} - {response.text}")
+            return jsonify({
+                'success': False,
+                'message': f'Database error: {response.status_code}'
+            }), 500
+
     except Exception as exc:
         print(f'Error placing order: {exc}')
         traceback.print_exc()
