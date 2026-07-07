@@ -43,6 +43,10 @@
             font-weight: 700;
             animation: pulse-badge 2s infinite;
         }
+        .pos-header .brand .badge.offline {
+            background: #f59e0b;
+            color: #0f172a;
+        }
         .pos-header .brand .user-tag {
             font-size: 0.6rem;
             color: #94a3b8;
@@ -78,6 +82,26 @@
         .pos-header .header-btn:hover { background: rgba(255,255,255,0.1); color: white; }
         .pos-header .header-btn.logout-btn { color: #f87171; }
         .pos-header .header-btn.logout-btn:hover { background: rgba(239,68,68,0.15); color: #fca5a5; }
+
+        /* ===== SYNC STATUS ===== */
+        #syncStatus {
+            background: #dc2626;
+            color: white;
+            padding: 4px 14px;
+            border-radius: 9999px;
+            font-size: 0.6rem;
+            font-weight: 600;
+            display: none;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: none;
+            margin-left: 8px;
+            animation: pulse-badge 2s infinite;
+        }
+        #syncStatus:hover { transform: scale(1.05); opacity: 0.9; }
+        #syncStatus.synced { background: #059669; animation: none; }
 
         .stats-bar {
             display: grid;
@@ -351,6 +375,7 @@
         .btn-gradient.amber { background: linear-gradient(135deg, #f59e0b, #d97706); }
         .btn-gradient.rose { background: linear-gradient(135deg, #ef4444, #dc2626); }
         .btn-gradient.indigo { background: linear-gradient(135deg, #4f46e5, #6366f1); }
+        .btn-gradient.sync { background: linear-gradient(135deg, #2563eb, #4f46e5); }
 
         .glass-card {
             background: white;
@@ -400,7 +425,7 @@
 
         .quick-actions {
             display: grid;
-            grid-template-columns: repeat(6, 1fr);
+            grid-template-columns: repeat(7, 1fr);
             gap: 5px;
             margin-bottom: 10px;
         }
@@ -418,6 +443,8 @@
         }
         .quick-action-btn:hover { background: #ecfdf5; border-color: #059669; color: #059669; transform: translateY(-2px); }
         .quick-action-btn i { display: block; font-size: 0.9rem; margin-bottom: 2px; }
+        .quick-action-btn.sync-btn { background: #dbeafe; border-color: #2563eb; color: #2563eb; }
+        .quick-action-btn.sync-btn:hover { background: #2563eb; color: white; }
 
         .held-orders-panel {
             background: white;
@@ -466,10 +493,11 @@
             .stats-bar { grid-template-columns: repeat(2, 1fr); padding: 10px 16px; }
             .pos-header { padding: 8px 16px; }
             .pos-header .brand { font-size: 1rem; }
-            .quick-actions { grid-template-columns: repeat(3, 1fr); }
+            .quick-actions { grid-template-columns: repeat(4, 1fr); }
             .product-pos-card .stock-count { font-size: 0.5rem; }
             .pos-header .brand .user-tag { font-size: 0.5rem; margin-left: 4px; padding-left: 4px; }
             .pos-header .brand .user-tag .role { display: none; }
+            #syncStatus { font-size: 0.5rem; padding: 3px 10px; }
         }
         @media (max-width: 480px) {
             .stats-bar { grid-template-columns: 1fr 1fr; gap: 6px; padding: 8px 12px; }
@@ -479,6 +507,7 @@
             .product-pos-card .stock-count { font-size: 0.45rem; }
             .product-pos-card .stock-count .number { font-size: 0.5rem; }
             .pos-header .brand .user-tag { display: none; }
+            .quick-actions { grid-template-columns: repeat(3, 1fr); }
         }
     </style>
 </head>
@@ -489,7 +518,7 @@
         <div class="brand">
             <i class="fas fa-cash-register text-green-400 animate-float"></i>
             Price<span>Point</span> POS
-            <span class="badge">● LIVE</span>
+            <span class="badge" id="onlineBadge">● LIVE</span>
             {% if session.user %}
             <span class="user-tag">
                 👤 {{ session.user.name }}
@@ -499,6 +528,12 @@
         </div>
         <div class="header-actions">
             <span class="time"><i class="far fa-clock"></i> <span id="clockDisplay"></span></span>
+            <!-- Sync Status -->
+            <span id="syncStatus" onclick="manualSync()">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <span id="unsyncedCount">0</span> offline order(s)
+                <i class="fas fa-sync-alt" style="font-size: 0.5rem; opacity: 0.7;"></i>
+            </span>
             <span class="stat-label">My Sales:</span>
             <span class="stat-value" id="userTodaySales">KSh 0</span>
             <span class="stat-label">My Orders:</span>
@@ -565,6 +600,9 @@
                 <p class="text-gray-400 text-xs">Search, scan, or browse to add items</p>
             </div>
             <div class="flex gap-2 flex-wrap">
+                <button class="btn-gradient sync" onclick="manualSync()">
+                    <i class="fas fa-cloud-upload-alt"></i> Sync
+                </button>
                 <button class="btn-gradient" onclick="toggleCustomerModal()">
                     <i class="fas fa-user-plus"></i> Customer
                 </button>
@@ -599,6 +637,9 @@
             </div>
             <div class="quick-action-btn" onclick="holdOrder()">
                 <i class="fas fa-pause"></i> Hold
+            </div>
+            <div class="quick-action-btn sync-btn" onclick="manualSync()">
+                <i class="fas fa-cloud-upload-alt"></i> Sync
             </div>
         </div>
 
@@ -842,6 +883,31 @@
         updateClock();
 
         // ============================================================
+        // ONLINE/OFFLINE STATUS
+        // ============================================================
+        function updateOnlineStatus() {
+            const badge = document.getElementById('onlineBadge');
+            const isOnline = navigator.onLine;
+            
+            if (isOnline) {
+                badge.textContent = '● LIVE';
+                badge.className = 'badge';
+                badge.style.background = '#34d399';
+                badge.style.color = '#0f172a';
+            } else {
+                badge.textContent = '● OFFLINE';
+                badge.className = 'badge offline';
+                badge.style.background = '#f59e0b';
+                badge.style.color = '#0f172a';
+            }
+        }
+
+        // Update on status change
+        window.addEventListener('online', updateOnlineStatus);
+        window.addEventListener('offline', updateOnlineStatus);
+        updateOnlineStatus();
+
+        // ============================================================
         // LOAD USER STATS - Shows stats for the logged-in user
         // ============================================================
         function loadUserStats() {
@@ -854,10 +920,6 @@
                         
                         document.getElementById('userTodaySales').textContent = todaySales;
                         document.getElementById('userTodayOrders').textContent = todayOrders;
-                        
-                        // Also update the header stats
-                        document.getElementById('headerTodaySales').textContent = todaySales;
-                        document.getElementById('headerTodayOrders').textContent = todayOrders;
                     }
                 })
                 .catch(err => console.error('User stats error:', err));
@@ -886,6 +948,87 @@
                 })
                 .catch(err => console.error('Stats error:', err));
         }
+
+        // ============================================================
+        // SYNC FUNCTIONS
+        // ============================================================
+
+        function syncOfflineOrders() {
+            if (!navigator.onLine) {
+                showToast('📡 Offline - will sync when online', 'warning');
+                return;
+            }
+            
+            showToast('🔄 Syncing offline orders...', 'info');
+            
+            fetch('/admin/api/sync-queue', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    if (data.synced > 0) {
+                        showToast(`✅ Synced ${data.synced} offline orders to cloud!`, 'success');
+                        loadUserStats();
+                        loadSalesStats();
+                        checkUnsyncedOrders();
+                    } else if (data.failed > 0) {
+                        showToast(`⚠️ ${data.failed} orders failed to sync. Check connection.`, 'warning');
+                    } else {
+                        showToast('✅ All orders are synced!', 'success');
+                    }
+                } else {
+                    showToast('❌ Sync failed: ' + (data.message || 'Unknown error'), 'error');
+                }
+            })
+            .catch(err => {
+                console.error('Sync error:', err);
+                showToast('❌ Sync error: ' + err.message, 'error');
+            });
+        }
+
+     function checkUnsyncedOrders() {
+    fetch('/admin/api/unsynced-count')
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                const statusEl = document.getElementById('syncStatus');
+                const countEl = document.getElementById('unsyncedCount');
+                
+                if (statusEl) {
+                    // Only show if there are ACTUAL unsynced orders
+                    if (data.count > 0) {
+                        statusEl.style.display = 'inline-flex';
+                        statusEl.className = '';
+                        if (countEl) countEl.textContent = data.count;
+                        
+                        let orderIds = data.orders || [];
+                        let tooltip = orderIds.length > 0 ? 'Orders: ' + orderIds.join(', ') : '';
+                        statusEl.title = tooltip;
+                    } else {
+                        statusEl.style.display = 'none';
+                    }
+                }
+            }
+        })
+        .catch(err => console.error('Error checking sync status:', err));
+}
+
+        function manualSync() {
+            syncOfflineOrders();
+        }
+
+        // ============================================================
+        // AUTO-SYNC EVENTS
+        // ============================================================
+
+        window.addEventListener('online', function() {
+            showToast('🔄 Back online! Syncing orders...', 'info');
+            updateOnlineStatus();
+            setTimeout(syncOfflineOrders, 1000);
+            setTimeout(checkUnsyncedOrders, 500);
+        });
 
         // ============================================================
         // SEARCH & FILTER
@@ -1319,13 +1462,20 @@
             .then(r => { if (!r.ok) throw new Error('Network error'); return r.json(); })
             .then(data => {
                 if (data.success) {
-                    showToast('✅ Order placed! #' + data.order_id + ' | Total: KSh ' + total.toLocaleString(), 'success');
+                    let message = '✅ Order placed! #' + data.order_id + ' | Total: KSh ' + total.toLocaleString();
+                    if (data.offline) {
+                        message += ' (Saved offline - will sync when online)';
+                        setTimeout(checkUnsyncedOrders, 1000);
+                    } else if (data.synced) {
+                        message += ' (Synced to cloud)';
+                    }
+                    showToast(message, data.offline ? 'warning' : 'success');
                     posCart = [];
                     discountValue = 0;
                     document.getElementById('discountDisplay').textContent = '0%';
                     updatePOSUI();
                     loadSalesStats();
-                    loadUserStats(); // Update user stats after order
+                    loadUserStats();
                 } else {
                     showToast('❌ Error: ' + (data.message || 'Unknown error'), 'error');
                 }
@@ -1457,7 +1607,7 @@
                 toastMessage.textContent = message;
                 toast.classList.remove('hidden');
                 clearTimeout(window.toastTimeout);
-                window.toastTimeout = setTimeout(() => toast.classList.add('hidden'), 3000);
+                window.toastTimeout = setTimeout(() => toast.classList.add('hidden'), 4000);
             } else { alert(message); }
         }
 
@@ -1472,6 +1622,7 @@
             if (e.key === 'F3') { toggleDiscountModal(); e.preventDefault(); }
             if (e.key === 'F4') { toggleReturnModal(); e.preventDefault(); }
             if (e.key === 'F5') { holdOrder(); e.preventDefault(); }
+            if (e.key === 'F6') { manualSync(); e.preventDefault(); }
             if ((e.key === 'Delete' || e.key === 'Backspace') && document.activeElement.id !== 'posSearch') {
                 voidLastItem();
                 e.preventDefault();
@@ -1487,14 +1638,25 @@
                     <i class="fas fa-search"></i>
                     <p>Search for products</p>
                     <p class="text-xs text-gray-400">${allProducts.length} products available</p>
-                    <div class="shortcuts">⌨️ F1: Search | F2: Customer | F3: Discount | F4: Return | F5: Hold | Ctrl+Enter: Checkout</div>
+                    <div class="shortcuts">⌨️ F1: Search | F2: Customer | F3: Discount | F4: Return | F5: Hold | F6: Sync | Ctrl+Enter: Checkout</div>
                 </div>
             `;
             document.getElementById('resultCount').textContent = `${allProducts.length} products available`;
             updatePOSUI();
             loadSalesStats();
-            loadUserStats(); // Load user stats on init
+            loadUserStats();
+            
+            // Check for unsynced orders after 2 seconds
+            setTimeout(function() {
+                if (navigator.onLine) {
+                    checkUnsyncedOrders();
+                    // Auto-sync after 3 seconds if online
+                    setTimeout(syncOfflineOrders, 3000);
+                }
+            }, 2000);
+            
             console.log('✅ POS Pro v3.0 initialized with ' + allProducts.length + ' products');
+            console.log('📡 Status:', navigator.onLine ? 'Online' : 'Offline');
         });
     </script>
 </body>
