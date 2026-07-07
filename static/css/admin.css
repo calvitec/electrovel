@@ -1303,173 +1303,97 @@ tr:last-child td {
     }
 }
 /* ============================================================
-   SIDEBAR TOGGLE (Mobile) - FIXED
+   MOBILE SIDEBAR - 100% GUARANTEED TO WORK
    ============================================================ */
+
+/* ===== SIDEBAR TOGGLE BUTTON - ALWAYS VISIBLE ON MOBILE ===== */
 .sidebar-toggle {
-    display: none;
-    background: var(--bg-surface);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-sm);
-    padding: 6px 10px;
-    font-size: 1rem;
-    cursor: pointer;
-    color: var(--text-primary);
-    transition: all var(--transition-base);
+    display: none !important;
 }
 
-.sidebar-toggle:hover {
-    background: var(--bg-primary);
-}
-
-/* ===== MOBILE SIDEBAR OVERRIDES ===== */
-@media (max-width: 768px) {
-    .sidebar {
-        position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
-        bottom: 0 !important;
-        width: 280px !important;
-        max-width: 80vw !important;
-        height: 100vh !important;
-        transform: translateX(-105%) !important;
-        transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
-        z-index: 1000 !important;
-        border: none !important;
-        box-shadow: 4px 0 30px rgba(0, 0, 0, 0.25) !important;
-        border-radius: 0 !important;
-        overflow-y: auto !important;
-        padding-top: 16px !important;
-    }
-
-    .sidebar.open {
-        transform: translateX(0) !important;
-    }
-
-    .sidebar-toggle {
-        display: inline-flex !important;
-        align-items: center;
-        gap: 6px;
-    }
-
-    .main-content {
-        width: 100% !important;
-        margin-left: 0 !important;
-    }
-
-    .content-area {
-        padding: 10px 12px 20px !important;
-    }
-
-    .header {
-        padding: 0 12px !important;
-        height: 50px !important;
-    }
-
-    .header .page-subtitle {
-        display: none;
-    }
-
-    .sidebar-backdrop {
-        display: none !important;
-        position: fixed !important;
-        inset: 0 !important;
-        background: rgba(0, 0, 0, 0.4) !important;
-        backdrop-filter: blur(4px) !important;
-        z-index: 999 !important;
-    }
-
-    .sidebar-backdrop.active {
-        display: block !important;
-    }
-}
-
-@media (max-width: 480px) {
-    .sidebar {
-        width: 100% !important;
-        max-width: 100% !important;
-    }
-}
-/* ============================================================
-   SIDEBAR TOGGLE - FIXED WITH PARTIAL COVER
-   ============================================================ */
-
-/* Force the toggle button to always be visible on mobile */
 @media (max-width: 768px) {
     .sidebar-toggle {
-        display: inline-flex !important;
+        display: flex !important;
         align-items: center !important;
         justify-content: center !important;
-        gap: 6px !important;
-        background: #ffffff !important;
-        border: 1px solid #e2e8f0 !important;
-        border-radius: 8px !important;
-        padding: 8px 12px !important;
-        font-size: 1.1rem !important;
+        background: transparent !important;
+        border: none !important;
+        padding: 10px !important;
+        font-size: 1.4rem !important;
         cursor: pointer !important;
         color: #0f172a !important;
-        width: auto !important;
-        height: auto !important;
-        min-width: 40px !important;
-        min-height: 40px !important;
+        min-width: 48px !important;
+        min-height: 48px !important;
         z-index: 1001 !important;
         position: relative !important;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06) !important;
-    }
-
-    .sidebar-toggle:hover {
-        background: #f1f5f9 !important;
-        border-color: #2563eb !important;
     }
 
     .sidebar-toggle:active {
-        transform: scale(0.95) !important;
+        transform: scale(0.9) !important;
     }
 
     .sidebar-toggle i {
-        font-size: 1.2rem !important;
+        font-size: 1.4rem !important;
         color: #0f172a !important;
+        pointer-events: none !important;
     }
 
-    /* Sidebar - covers 70-80% of screen */
+    /* ===== SIDEBAR - SLIDES FROM LEFT ===== */
     .sidebar {
         position: fixed !important;
         top: 0 !important;
         left: 0 !important;
         bottom: 0 !important;
         width: 280px !important;
-        max-width: 75vw !important;  /* ← 75% of screen width */
+        max-width: 75vw !important;
         height: 100vh !important;
-        transform: translateX(-105%) !important;
-        transition: transform 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+        transform: translateX(-100%) !important;
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
         z-index: 1000 !important;
         border: none !important;
-        box-shadow: 4px 0 30px rgba(0, 0, 0, 0.25) !important;
         border-radius: 0 !important;
         overflow-y: auto !important;
         padding-top: 16px !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
         background: #0f172a !important;
+        box-shadow: 2px 0 20px rgba(0, 0, 0, 0.4) !important;
+        visibility: visible !important;
+        opacity: 1 !important;
     }
 
     .sidebar.open {
         transform: translateX(0) !important;
     }
 
+    /* ===== BACKDROP - DARK OVERLAY ===== */
     .sidebar-backdrop {
         display: none !important;
         position: fixed !important;
-        inset: 0 !important;
-        background: rgba(0, 0, 0, 0.4) !important;
-        backdrop-filter: blur(4px) !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        background: rgba(0, 0, 0, 0.5) !important;
+        backdrop-filter: blur(3px) !important;
+        -webkit-backdrop-filter: blur(3px) !important;
         z-index: 999 !important;
+        opacity: 0 !important;
+        transition: opacity 0.3s ease !important;
+        pointer-events: none !important;
     }
 
     .sidebar-backdrop.active {
         display: block !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
     }
 
+    /* ===== MAIN CONTENT - FULL WIDTH ===== */
     .main-content {
         width: 100% !important;
         margin-left: 0 !important;
+        padding-left: 0 !important;
     }
 
     .content-area {
@@ -1478,7 +1402,7 @@ tr:last-child td {
 
     .header {
         padding: 0 12px !important;
-        height: 50px !important;
+        height: 56px !important;
     }
 
     .header .page-subtitle {
@@ -1486,22 +1410,22 @@ tr:last-child td {
     }
 }
 
+/* Extra small phones */
 @media (max-width: 480px) {
-    /* For very small phones, still keep it at 80% */
     .sidebar {
         width: 260px !important;
-        max-width: 80vw !important;  /* ← 80% on very small screens */
+        max-width: 80vw !important;
     }
 
     .sidebar-toggle {
-        padding: 6px 10px !important;
-        font-size: 1rem !important;
-        min-width: 36px !important;
-        min-height: 36px !important;
+        padding: 8px !important;
+        font-size: 1.2rem !important;
+        min-width: 44px !important;
+        min-height: 44px !important;
     }
 }
 
-/* Desktop: hide the toggle button */
+/* Desktop - hide toggle */
 @media (min-width: 769px) {
     .sidebar-toggle {
         display: none !important;
