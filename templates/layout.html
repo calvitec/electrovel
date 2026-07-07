@@ -14,91 +14,105 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
-    <!-- ===== ONLY ADD THESE MOBILE STYLES ===== -->
     <style>
-        /* Mobile Sidebar - ONLY what's needed for collapsible */
-        @media (max-width: 768px) {
-            .sidebar {
-                position: fixed;
-                top: 0;
-                left: 0;
-                bottom: 0;
-                width: 280px;
-                max-width: 80vw;
-                transform: translateX(-105%);
-                transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-                z-index: 1000;
-                border: none;
-                box-shadow: 4px 0 40px rgba(0,0,0,0.1);
-            }
-            .sidebar.open {
-                transform: translateX(0);
-            }
-            .sidebar-backdrop {
-                display: none;
-                position: fixed;
-                inset: 0;
-                background: rgba(0,0,0,0.4);
-                backdrop-filter: blur(4px);
-                z-index: 999;
-            }
-            .sidebar-backdrop.active {
-                display: block;
-            }
-            .sidebar-close {
-                display: block !important;
-            }
-            .main-content {
-                margin-left: 0 !important;
-                width: 100% !important;
-            }
-        }
-        @media (min-width: 769px) {
-            .sidebar-backdrop {
-                display: none !important;
-            }
-        }
-        .sidebar-close {
-            display: none;
-            background: none;
-            border: none;
-            color: #94a3b8;
-            font-size: 1.2rem;
-            cursor: pointer;
-            padding: 4px 8px;
-            margin-left: auto;
-        }
-        .sidebar-close:hover { color: white; }
+        /* ============================================================
+           SIDEBAR TOGGLE - CLEAN FIX
+           ============================================================ */
+        
+        /* Base style - hidden by default on desktop */
         .sidebar-toggle {
-            background: none;
+            display: none;
+            background: white;
             border: 1px solid #e2e8f0;
             border-radius: 8px;
             padding: 6px 10px;
-            cursor: pointer;
-            color: #475569;
             font-size: 1rem;
-            display: none;
+            cursor: pointer;
+            color: #0f172a;
+            transition: all 0.2s;
+            align-items: center;
+            gap: 6px;
         }
         .sidebar-toggle:hover {
             background: #f0f4f8;
             border-color: #94a3b8;
         }
+
+        /* Mobile: show hamburger */
         @media (max-width: 768px) {
             .sidebar-toggle {
-                display: flex;
-                align-items: center;
-                gap: 6px;
+                display: inline-flex !important;
+            }
+            
+            /* Sidebar slides in from left */
+            .sidebar {
+                position: fixed !important;
+                top: 0 !important;
+                left: 0 !important;
+                bottom: 0 !important;
+                width: 280px !important;
+                max-width: 80vw !important;
+                height: 100vh !important;
+                transform: translateX(-105%) !important;
+                transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+                z-index: 1000 !important;
+                border: none !important;
+                box-shadow: 4px 0 30px rgba(0, 0, 0, 0.25) !important;
+                border-radius: 0 !important;
+                overflow-y: auto !important;
+                background: #0f172a !important;
+            }
+
+            .sidebar.open {
+                transform: translateX(0) !important;
+            }
+
+            /* Backdrop */
+            .sidebar-backdrop {
+                display: none !important;
+                position: fixed !important;
+                inset: 0 !important;
+                background: rgba(0, 0, 0, 0.4) !important;
+                backdrop-filter: blur(4px) !important;
+                z-index: 999 !important;
+            }
+            .sidebar-backdrop.active {
+                display: block !important;
+            }
+
+            /* Main content full width */
+            .main-content {
+                width: 100% !important;
+                margin-left: 0 !important;
+            }
+
+            .content-area {
+                padding: 10px 12px 20px !important;
+            }
+
+            .header {
+                padding: 0 12px !important;
+                height: 50px !important;
+            }
+
+            .header .page-subtitle {
+                display: none !important;
             }
         }
-        /* Prevent body scroll when sidebar open */
-        body.no-scroll { overflow: hidden; }
+
+        @media (max-width: 480px) {
+            .sidebar {
+                width: 100% !important;
+                max-width: 100% !important;
+            }
+        }
     </style>
 </head>
 <body>
 
     <div class="app">
 
-        <!-- ===== SIDEBAR (add sidebar-close button inside) ===== -->
+        <!-- ===== SIDEBAR ===== -->
         <aside class="sidebar" id="sidebar">
             <!-- Brand -->
             <div class="brand">
@@ -107,65 +121,63 @@
                     <div class="brand-text">Price<span>Point</span></div>
                     <div class="brand-sub">Administration</div>
                 </div>
-                <button class="sidebar-close" onclick="closeSidebar()" aria-label="Close sidebar">
-                    <i class="fas fa-times"></i>
-                </button>
             </div>
 
             <!-- Navigation -->
             <div class="nav-label">Main</div>
-            <a href="#dashboard" class="nav-item active" onclick="showSection('dashboard'); closeSidebarOnMobile();">
+            <a href="#dashboard" class="nav-item active" onclick="showSection('dashboard')">
                 <i class="fas fa-th-large"></i><span>Dashboard</span>
             </a>
 
             <div class="nav-label">Management</div>
-            <a href="#orders" class="nav-item" onclick="showSection('orders'); closeSidebarOnMobile();">
+            <a href="#orders" class="nav-item" onclick="showSection('orders')">
                 <i class="fas fa-shopping-cart"></i><span>Orders</span>
                 <span class="dot" id="orderDot"></span>
                 <span class="badge" id="orderCount">{{ stats.total_orders|default(0) }}</span>
             </a>
-            <a href="#products" class="nav-item" onclick="showSection('products'); closeSidebarOnMobile();">
+            <a href="#products" class="nav-item" onclick="showSection('products')">
                 <i class="fas fa-box"></i><span>Products</span>
                 <span class="badge" id="productCount">{{ stats.total_products|default(0) }}</span>
             </a>
-            <a href="#customers" class="nav-item" onclick="showSection('customers'); closeSidebarOnMobile();">
+            <a href="#customers" class="nav-item" onclick="showSection('customers')">
                 <i class="fas fa-users"></i><span>Customers</span>
                 <span class="badge" id="customerCount">{{ stats.total_customers|default(0) }}</span>
             </a>
 
             <div class="nav-label">Sales</div>
-            <a href="/admin/pos" target="_blank" class="nav-item pos-link" onclick="closeSidebarOnMobile();">
+            <a href="/admin/pos" target="_blank" class="nav-item pos-link">
                 <i class="fas fa-cash-register"></i><span>Point of Sale</span>
                 <span class="pos-badge">LAUNCH</span>
                 <span class="dot" id="posDot"></span>
             </a>
 
             <div class="nav-label">Analytics</div>
-            <a href="#analytics" class="nav-item" onclick="showSection('analytics'); closeSidebarOnMobile();">
+            <a href="#analytics" class="nav-item" onclick="showSection('analytics')">
                 <i class="fas fa-chart-pie"></i><span>Analytics</span>
                 <span class="dot"></span>
             </a>
-            <a href="#add-product" class="nav-item" onclick="showSection('add-product'); closeSidebarOnMobile();">
+            <a href="#add-product" class="nav-item" onclick="showSection('add-product')">
                 <i class="fas fa-plus-circle"></i><span>Add Product</span>
             </a>
 
             <div class="spacer"></div>
 
             <div class="footer">
-                <a href="/" class="nav-item" onclick="closeSidebarOnMobile();"><i class="fas fa-store"></i><span>View Shop</span></a>
+                <a href="/" class="nav-item"><i class="fas fa-store"></i><span>View Shop</span></a>
             </div>
         </aside>
 
         <!-- ===== BACKDROP (mobile) ===== -->
-        <div class="sidebar-backdrop" id="backdrop" onclick="closeSidebar()"></div>
+        <div class="sidebar-backdrop" id="backdrop"></div>
 
         <!-- ===== MAIN CONTENT ===== -->
         <main class="main-content">
 
-            <!-- ===== HEADER (add sidebar-toggle button) ===== -->
+            <!-- ===== HEADER ===== -->
             <header class="header" id="header">
                 <div class="flex items-center gap-3">
-                    <button class="sidebar-toggle" onclick="toggleSidebar()" aria-label="Toggle sidebar">
+                    <!-- ===== HAMBURGER MENU ===== -->
+                    <button class="sidebar-toggle" id="hamburgerBtn" onclick="toggleSidebar()" aria-label="Toggle sidebar">
                         <i class="fas fa-bars"></i>
                     </button>
                     <div>
@@ -284,53 +296,96 @@
     <!-- ===== JAVASCRIPT ===== -->
     <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
 
-    <!-- ===== MOBILE SIDEBAR SCRIPTS ===== -->
+    <!-- ============================================================
+         SIDEBAR TOGGLE - PURE JAVASCRIPT (NO CONFLICT)
+         ============================================================ -->
     <script>
-        function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            const backdrop = document.getElementById('backdrop');
-            sidebar.classList.toggle('open');
-            backdrop.classList.toggle('active');
-            document.body.classList.toggle('no-scroll');
-        }
+        (function() {
+            'use strict';
 
-        function closeSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            const backdrop = document.getElementById('backdrop');
-            sidebar.classList.remove('open');
-            backdrop.classList.remove('active');
-            document.body.classList.remove('no-scroll');
-        }
+            // ============================================================
+            // SIDEBAR TOGGLE - SINGLE SOURCE OF TRUTH
+            // ============================================================
+            window.toggleSidebar = function() {
+                var sidebar = document.getElementById('sidebar');
+                var backdrop = document.getElementById('backdrop');
+                
+                if (!sidebar) {
+                    console.warn('Sidebar element not found');
+                    return;
+                }
+                
+                var isOpen = sidebar.classList.contains('open');
+                
+                if (isOpen) {
+                    sidebar.classList.remove('open');
+                    if (backdrop) backdrop.classList.remove('active');
+                } else {
+                    sidebar.classList.add('open');
+                    if (backdrop) backdrop.classList.add('active');
+                }
+            };
 
-        function closeSidebarOnMobile() {
-            if (window.innerWidth <= 768) {
-                closeSidebar();
+            // ============================================================
+            // CLOSE SIDEBAR - For backdrop and nav clicks
+            // ============================================================
+            function closeSidebar() {
+                var sidebar = document.getElementById('sidebar');
+                var backdrop = document.getElementById('backdrop');
+                if (sidebar) sidebar.classList.remove('open');
+                if (backdrop) backdrop.classList.remove('active');
             }
-        }
 
-        // Close sidebar on ESC
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') {
-                closeSidebar();
-                closeAllModals();
-            }
-        });
+            // ============================================================
+            // DOM READY - Setup event listeners
+            // ============================================================
+            document.addEventListener('DOMContentLoaded', function() {
+                var backdrop = document.getElementById('backdrop');
+                var hamburger = document.getElementById('hamburgerBtn');
 
-        // Close sidebar on resize to desktop
-        window.addEventListener('resize', function() {
-            if (window.innerWidth > 768) {
-                closeSidebar();
-            }
-        });
+                // Debug
+                console.log('🔍 Hamburger button:', hamburger ? '✅ Found' : '❌ Missing');
+                console.log('🔍 Sidebar:', document.getElementById('sidebar') ? '✅ Found' : '❌ Missing');
+                console.log('🔍 Backdrop:', backdrop ? '✅ Found' : '❌ Missing');
 
-        // Close all modals helper
-        function closeAllModals() {
-            document.querySelectorAll('.modal-overlay').forEach(function(modal) {
-                modal.classList.add('hidden');
+                // Close sidebar when clicking backdrop
+                if (backdrop) {
+                    backdrop.addEventListener('click', function() {
+                        closeSidebar();
+                    });
+                }
+
+                // Close sidebar when clicking nav items on mobile
+                document.querySelectorAll('.sidebar .nav-item').forEach(function(item) {
+                    item.addEventListener('click', function() {
+                        if (window.innerWidth <= 768) {
+                            closeSidebar();
+                        }
+                    });
+                });
+
+                // Close sidebar on resize to desktop
+                window.addEventListener('resize', function() {
+                    if (window.innerWidth > 768) {
+                        closeSidebar();
+                    }
+                });
+
+                // Close sidebar on Escape key
+                document.addEventListener('keydown', function(e) {
+                    if (e.key === 'Escape') {
+                        closeSidebar();
+                    }
+                });
+
+                console.log('✅ Sidebar toggle system ready');
             });
-        }
 
-        // Override closeModal for compatibility
+        })();
+
+        // ============================================================
+        // CLOSE MODAL HELPER
+        // ============================================================
         function closeModal(id) {
             var modal = document.getElementById(id);
             if (modal) modal.classList.add('hidden');
