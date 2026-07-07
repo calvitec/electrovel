@@ -1506,3 +1506,19 @@ tr:last-child td {
         display: none !important;
     }
 }
+/* ============================================================
+   FIX: SIDEBAR SHOULDN'T COVER FULL SCREEN ON MOBILE
+   ============================================================ */
+@media (max-width: 768px) {
+    .sidebar {
+        width: 280px !important;
+        max-width: 75vw !important;  /* ← 75% of screen width */
+    }
+}
+
+@media (max-width: 480px) {
+    .sidebar {
+        width: 260px !important;
+        max-width: 80vw !important;  /* ← 80% on very small screens */
+    }
+}
