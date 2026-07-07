@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, send_from_directory
 from datetime import datetime
 import os
 import traceback
@@ -9,17 +9,57 @@ from routes.api import api_bp
 from routes.admin import admin_bp
 from utils.data import load_orders, load_products, load_bundles, sync_products_from_supabase, sync_pending_data_if_possible
 
+# ============================================================
+# APP INITIALIZATION
+# ============================================================
 app = Flask(__name__)
 application = app
+
+# ============================================================
+# CONFIGURATION
+# ============================================================
 app.config.from_object(Config)
 app.secret_key = Config.SECRET_KEY
 app.permanent_session_lifetime = Config.PERMANENT_SESSION_LIFETIME
 app.template_folder = 'templates'
-app.static_folder = Config.STATIC_FOLDER
 
+# Fix: Ensure static folder is set correctly
+if Config.IS_VERCEL:
+    # On Vercel, use /tmp/static
+    app.static_folder = Config.STATIC_FOLDER
+else:
+    # Local development - use ./static
+    app.static_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
+
+# Ensure upload folder exists
 os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
 
+# ============================================================
+# CONTEXT PROCESSOR - Cache busting
+# ============================================================
+@app.context_processor
+def inject_now():
+    """Inject current timestamp for cache busting"""
+    return {'now': datetime.utcnow().timestamp()}
 
+# ============================================================
+# STATIC FILE SERVING (Fallback)
+# ============================================================
+@app.route('/static/<path:filename>')
+def serve_static(filename):
+    """Serve static files with proper MIME types"""
+    # For Vercel, serve from /tmp/static if file exists there
+    if Config.IS_VERCEL:
+        vercel_static = os.path.join('/tmp', 'static')
+        if os.path.exists(os.path.join(vercel_static, filename)):
+            return send_from_directory(vercel_static, filename)
+    
+    # Fallback to local static folder
+    return send_from_directory(app.static_folder, filename)
+
+# ============================================================
+# TEMPLATE FILTERS
+# ============================================================
 @app.template_filter('format_number')
 def format_number_filter(value):
     try:
@@ -29,13 +69,23 @@ def format_number_filter(value):
     except (ValueError, TypeError):
         return '0'
 
+@app.template_filter('format_currency')
+def format_currency_filter(value):
+    try:
+        if value is None:
+            return 'KSh 0'
+        return f"KSh {int(float(value)):,}"
+    except (ValueError, TypeError):
+        return 'KSh 0'
 
+# ============================================================
+# ERROR HANDLERS
+# ============================================================
 @app.errorhandler(404)
 def not_found(error):
     if request.path.startswith('/admin/') or request.path.startswith('/api/'):
         return jsonify({'error': 'Not found', 'message': 'The requested endpoint does not exist'}), 404
     return render_template('404.html'), 404
-
 
 @app.errorhandler(500)
 def server_error(error):
@@ -45,12 +95,16 @@ def server_error(error):
         return jsonify({'error': 'Server error', 'message': str(error)}), 500
     return render_template('500.html'), 500
 
-
+# ============================================================
+# REGISTER BLUEPRINTS
+# ============================================================
 app.register_blueprint(shop_bp)
 app.register_blueprint(api_bp)
 app.register_blueprint(admin_bp)
 
-
+# ============================================================
+# BEFORE REQUEST - Sync pending orders
+# ============================================================
 @app.before_request
 def maybe_sync_pending_orders():
     if request.path.startswith('/static/') or request.path.startswith('/favicon.ico'):
@@ -58,12 +112,21 @@ def maybe_sync_pending_orders():
     sync_pending_data_if_possible()
     return None
 
-
+# ============================================================
+# HEALTH CHECK
+# ============================================================
 @app.route('/health')
 def health():
-    return jsonify({'status': 'ok', 'message': 'Server is running', 'timestamp': datetime.utcnow().isoformat()})
+    return jsonify({
+        'status': 'ok', 
+        'message': 'Server is running', 
+        'timestamp': datetime.utcnow().isoformat(),
+        'static_folder': app.static_folder
+    })
 
-
+# ============================================================
+# DEBUG ROUTES
+# ============================================================
 @app.route('/debug')
 def debug():
     try:
@@ -77,11 +140,55 @@ def debug():
             'sample_order': orders[0] if orders else None,
             'sample_product': products[0] if products else None,
             'is_vercel': Config.IS_VERCEL,
+            'static_folder': app.static_folder,
+            'project_root': Config.PROJECT_ROOT,
         })
     except Exception as exc:
         return jsonify({'error': str(exc)})
 
+@app.route('/debug-static')
+def debug_static():
+    """Debug route to check static file availability"""
+    import os
+    
+    result = {
+        'static_folder': app.static_folder,
+        'static_folder_exists': os.path.exists(app.static_folder),
+        'is_vercel': Config.IS_VERCEL,
+        'project_root': Config.PROJECT_ROOT,
+        'upload_folder': Config.UPLOAD_FOLDER,
+        'upload_exists': os.path.exists(Config.UPLOAD_FOLDER),
+    }
+    
+    # Check CSS file in various locations
+    css_paths = [
+        os.path.join(app.static_folder, 'css', 'admin.css'),
+        os.path.join(Config.PROJECT_ROOT, 'static', 'css', 'admin.css'),
+        os.path.join('/tmp', 'static', 'css', 'admin.css'),
+    ]
+    
+    for path in css_paths:
+        result[f'css_{path.replace("/", "_")}'] = {
+            'path': path,
+            'exists': os.path.exists(path),
+            'size': os.path.getsize(path) if os.path.exists(path) else 0
+        }
+    
+    # List static folder contents
+    if os.path.exists(app.static_folder):
+        try:
+            result['static_contents'] = os.listdir(app.static_folder)
+            css_folder = os.path.join(app.static_folder, 'css')
+            if os.path.exists(css_folder):
+                result['css_contents'] = os.listdir(css_folder)
+        except Exception as e:
+            result['list_error'] = str(e)
+    
+    return jsonify(result)
 
+# ============================================================
+# LOAD SAMPLE DATA
+# ============================================================
 @app.route('/load-sample-data', methods=['GET', 'POST'])
 def load_sample_data():
     try:
@@ -245,16 +352,25 @@ def load_sample_data():
         if added > 0:
             sync_products_from_supabase()
 
-        return jsonify({'success': True, 'added': added, 'total': len(sample_products), 'errors': errors, 'message': f'Loaded {added}/{len(sample_products)} sample products'})
+        return jsonify({
+            'success': True, 
+            'added': added, 
+            'total': len(sample_products), 
+            'errors': errors, 
+            'message': f'Loaded {added}/{len(sample_products)} sample products'
+        })
     except Exception as exc:
         return jsonify({'success': False, 'error': str(exc)}), 500
 
-
+# ============================================================
+# MAIN - Run the app
+# ============================================================
 if __name__ == '__main__':
     print('\n' + '=' * 60)
     print('📱 PRICE POINT - Premium Electronics Shop')
     print('=' * 60)
     print(f"🌍 Environment: {'Vercel' if Config.IS_VERCEL else 'Local'}")
+    print(f"📁 Static Folder: {app.static_folder}")
     print(f"\n📊 Products: {len(load_products())}")
     print(f"📊 Orders: {len(load_orders())}")
     print('=' * 60)
