@@ -24,33 +24,185 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in Config.ALLOWED_EXTENSIONS
 
 
-@admin_bp.route('/admin/login', methods=['GET', 'POST'])
-def admin_login():
-    if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
+# ============================================================
+# HELPER: Check if user is admin
+# ============================================================
 
+def is_admin():
+    """Check if current user is admin"""
+    user = session.get('user', {})
+    return user.get('role') == 'admin' or session.get('admin_logged_in')
+
+
+def is_logged_in():
+    """Check if user is logged in (any role)"""
+    return 'user' in session or session.get('admin_logged_in')
+
+
+def admin_required(f):
+    """Decorator to require admin role"""
+    from functools import wraps
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not is_admin():
+            flash('Admin access required', 'danger')
+            return redirect(url_for('admin.user_login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+def login_required(f):
+    """Decorator to require any logged in user"""
+    from functools import wraps
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not is_logged_in():
+            flash('Please login first', 'danger')
+            return redirect(url_for('admin.user_login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+# ============================================================
+# UNIFIED AUTHENTICATION ROUTES
+# ============================================================
+
+@admin_bp.route('/login', methods=['GET', 'POST'])
+def user_login():
+    """Unified login with database + legacy fallback"""
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip()
+        password = request.form.get('password', '').strip()
+        
+        if not email or not password:
+            flash('Please enter both email and password', 'danger')
+            return render_template('admin_login.html')
+        
+        # ============================================================
+        # DATABASE AUTHENTICATION (Primary)
+        # ============================================================
+        try:
+            try:
+                from models.user import User
+                user, error = User.authenticate(email, password)
+                
+                if user:
+                    session['user'] = {
+                        'id': user.id,
+                        'email': user.email,
+                        'name': user.full_name,
+                        'role': user.role
+                    }
+                    
+                    if user.role == 'admin':
+                        flash('Welcome back, ' + user.full_name + '!', 'success')
+                        return redirect('/admin')
+                    else:
+                        flash('Welcome, ' + user.full_name + '!', 'success')
+                        return redirect('/admin/pos')
+            except ImportError:
+                print("⚠️ User model not found, using legacy auth only")
+        except Exception as e:
+            print(f"DB auth error: {e}")
+        
+        # ============================================================
+        # LEGACY AUTHENTICATION (Fallback)
+        # ============================================================
+        users = {
+            'admin@pricepoint.com': {
+                'password': 'electronics2026',
+                'name': 'Admin User',
+                'role': 'admin',
+                'redirect': '/admin'
+            },
+            'user@pricepoint.com': {
+                'password': 'electronics2026',
+                'name': 'John Doe',
+                'role': 'user',
+                'redirect': '/admin/pos'
+            },
+            'pos@pricepoint.com': {
+                'password': 'electronics2026',
+                'name': 'POS Operator',
+                'role': 'pos',
+                'redirect': '/admin/pos'
+            },
+            'manager@pricepoint.com': {
+                'password': 'electronics2026',
+                'name': 'Store Manager',
+                'role': 'manager',
+                'redirect': '/admin/pos'
+            }
+        }
+        
+        # Also check username (for old admin login compatibility)
+        username = request.form.get('username', '').strip()
         if username == 'admin' and password == 'electronics2026':
             session['admin_logged_in'] = True
-            flash('Login successful!', 'success')
-            return redirect(url_for('admin.admin_dashboard'))
-        flash('Invalid credentials', 'danger')
-
+            session['user'] = {
+                'email': 'admin@pricepoint.com',
+                'name': 'Admin User',
+                'role': 'admin',
+                'id': 'legacy_admin'
+            }
+            flash('Welcome back, Admin!', 'success')
+            return redirect('/admin')
+        
+        if email in users and users[email]['password'] == password:
+            session['user'] = {
+                'email': email,
+                'name': users[email]['name'],
+                'role': users[email]['role'],
+                'id': 'legacy_' + email
+            }
+            flash('Welcome, ' + users[email]['name'] + '!', 'success')
+            return redirect(users[email]['redirect'])
+        else:
+            flash('Invalid email or password', 'danger')
+            return render_template('admin_login.html')
+    
     return render_template('admin_login.html')
+
+
+@admin_bp.route('/logout')
+def user_logout():
+    """Unified logout"""
+    session.pop('user', None)
+    session.pop('admin_logged_in', None)
+    flash('Logged out successfully', 'success')
+    return redirect(url_for('admin.user_login'))
+
+
+# ============================================================
+# LEGACY REDIRECTS
+# ============================================================
+
+@admin_bp.route('/admin/login')
+def admin_login_redirect():
+    """Redirect old /admin/login to new /login"""
+    return redirect(url_for('admin.user_login'))
 
 
 @admin_bp.route('/admin/logout')
 def admin_logout():
+    """Legacy logout - redirect to new logout"""
     session.pop('admin_logged_in', None)
     flash('Logged out', 'success')
-    return redirect(url_for('admin.admin_login'))
+    return redirect(url_for('admin.user_login'))
 
+
+# ============================================================
+# ADMIN DASHBOARD - ADMIN ONLY
+# ============================================================
 
 @admin_bp.route('/admin')
+@admin_required  # ← Only admins can access this!
 def admin_dashboard():
-    if not session.get('admin_logged_in'):
-        flash('Please login first', 'danger')
-        return redirect(url_for('admin.admin_login'))
+    """Admin dashboard - ADMIN ONLY"""
+    # Check if user is admin (redundant but safe)
+    if not is_admin():
+        flash('Admin access required', 'danger')
+        return redirect(url_for('admin.user_login'))
 
     try:
         all_products = load_products()
@@ -407,12 +559,15 @@ def admin_dashboard():
         )
 
 
-@admin_bp.route('/admin/pos')
-def admin_pos():
-    if not session.get('admin_logged_in'):
-        flash('Please login first', 'danger')
-        return redirect(url_for('admin.admin_login'))
+# ============================================================
+# POS ROUTE - ACCESSIBLE BY ALL LOGGED-IN USERS
+# ============================================================
 
+@admin_bp.route('/admin/pos')
+@login_required  # ← Any logged-in user can access this
+def admin_pos():
+    """POS dashboard - accessible by all logged-in users"""
+    
     all_products = load_products()
     for product in all_products:
         if 'price' not in product or product['price'] is None:
@@ -487,15 +642,25 @@ def admin_pos():
     )
 
 
-@admin_bp.route('/admin/pos/place-order', methods=['POST'])
-def admin_pos_place_order():
-    if not session.get('admin_logged_in'):
-        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+# ============================================================
+# POS ORDER ROUTE - ACCESSIBLE BY ALL LOGGED-IN USERS
+# ============================================================
 
+@admin_bp.route('/admin/pos/place-order', methods=['POST'])
+@login_required
+def admin_pos_place_order():
     try:
         data = request.get_json()
         if not data or not data.get('items'):
             return jsonify({'success': False, 'message': 'No items in order'}), 400
+
+        # ============================================================
+        # GET CURRENT USER INFO
+        # ============================================================
+        user = session.get('user', {})
+        user_id = user.get('id', 'unknown')
+        user_name = user.get('name', 'Unknown User')
+        user_role = user.get('role', 'user')
 
         order_id = f'POS-{uuid.uuid4().hex[:8].upper()}'
         products = load_products()
@@ -549,6 +714,9 @@ def admin_pos_place_order():
         customer_phone = data.get('customer_phone', '') or data.get('customerPhone', '') or 'N/A'
         customer_address = data.get('customer_address', '') or data.get('customerAddress', '') or 'In-store purchase'
 
+        # ============================================================
+        # ORDER DATA WITH USER TRACKING
+        # ============================================================
         order_data = {
             'order_id': order_id,
             'items': items_with_cost,
@@ -567,9 +735,15 @@ def admin_pos_place_order():
                 'email': customer_email,
                 'phone': customer_phone,
                 'address': customer_address,
-            }
+            },
+            # ===== USER TRACKING =====
+            'user_id': user_id,
+            'user_name': user_name,
+            'user_role': user_role,
+            'staff_name': user_name  # alias for display
         }
 
+        print(f"👤 ORDER BY: {user_name} (ID: {user_id})")
         print(f"🔥 SAVING ORDER WITH CUSTOMER NAME: {customer_name}")
         print(f"📦 Order ID: {order_id}")
 
@@ -650,23 +824,93 @@ def admin_pos_place_order():
         print(f'POS Order error: {exc}')
         traceback.print_exc()
         return jsonify({'success': False, 'message': str(exc)}), 500
+    
+    # ============================================================
+# USER SALES STATS - Gets stats for the current user
+# ============================================================
 
+@admin_bp.route('/admin/api/user-stats', methods=['GET'])
+@login_required
+def api_user_stats():
+    """Get sales stats for the current user"""
+    try:
+        user = session.get('user', {})
+        user_id = user.get('id', 'unknown')
+        user_name = user.get('name', 'Unknown User')
+        
+        orders = load_orders()
+        today = datetime.utcnow().date()
+        
+        # Filter orders for this user
+        user_orders = []
+        for order in orders:
+            order_user_id = order.get('user_id', '')
+            if str(order_user_id) == str(user_id):
+                user_orders.append(order)
+            # Also check by staff_name/pos_staff
+            elif order.get('staff_name') == user_name:
+                user_orders.append(order)
+            elif order.get('user_name') == user_name:
+                user_orders.append(order)
+        
+        today_revenue = 0
+        today_orders = 0
+        total_revenue = 0
+        total_orders = len(user_orders)
+        
+        for order in user_orders:
+            total_revenue += order.get('total', 0)
+            
+            created_at = order.get('created_at', '')
+            if created_at:
+                try:
+                    if isinstance(created_at, str):
+                        if 'T' in created_at:
+                            order_date = datetime.fromisoformat(created_at.replace('Z', '').replace('+00:00', '')).date()
+                        else:
+                            order_date = datetime.strptime(created_at[:10], '%Y-%m-%d').date()
+                    elif isinstance(created_at, datetime):
+                        order_date = created_at.date()
+                    else:
+                        continue
+                    
+                    if order_date == today:
+                        today_revenue += order.get('total', 0)
+                        today_orders += 1
+                except:
+                    pass
+        
+        return jsonify({
+            'success': True,
+            'user': {
+                'id': user_id,
+                'name': user_name
+            },
+            'today_revenue': today_revenue,
+            'today_orders': today_orders,
+            'total_revenue': total_revenue,
+            'total_orders': total_orders
+        })
+    except Exception as e:
+        print(f"❌ User stats error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ============================================================
+# REMAINING ROUTES (same as before)
+# ============================================================
 
 @admin_bp.route('/admin/api/analytics')
+@login_required
 def admin_api_analytics():
-    if not session.get('admin_logged_in'):
-        return jsonify({'error': 'Unauthorized'}), 401
-    
     orders = load_orders()
     analytics = calculate_analytics_from_orders(orders)
     return jsonify(analytics)
 
 
 @admin_bp.route('/admin/api/revenue')
+@login_required
 def admin_api_revenue():
-    if not session.get('admin_logged_in'):
-        return jsonify({'error': 'Unauthorized'}), 401
-    
     try:
         orders = load_orders()
         
@@ -777,6 +1021,10 @@ def admin_api_revenue():
         traceback.print_exc()
         return jsonify({"error": str(exc)}), 500
 
+
+# ============================================================
+# REST OF ROUTES (same as before)
+# ============================================================
 
 def calculate_analytics_from_orders(orders):
     if not orders:
@@ -959,148 +1207,79 @@ def calculate_analytics_from_orders(orders):
 
 
 @admin_bp.route('/api/products/<product_id>', methods=['GET'])
+@login_required
 def api_get_product(product_id):
-    if not session.get('admin_logged_in'):
-        return jsonify({'error': 'Unauthorized'}), 401
-    
     try:
         products = load_products()
         for product in products:
             if str(product.get('id')) == str(product_id):
                 return jsonify(product)
-        
         return jsonify({'error': 'Product not found'}), 404
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 
 @admin_bp.route('/api/orders/<order_id>', methods=['GET'])
+@login_required
 def api_get_order(order_id):
-    if not session.get('admin_logged_in'):
-        return jsonify({'error': 'Unauthorized'}), 401
-    
     try:
         orders = load_orders()
-        print(f"🔍 Looking for order: {order_id}")
-        
         for order in orders:
             if str(order.get('order_id')) == str(order_id):
-                print(f"✅ Found order: {order}")
-                
                 customer = order.get('customer', {})
-                
                 if isinstance(customer, str):
                     try:
-                        if customer and customer.strip():
-                            customer = json.loads(customer)
-                        else:
-                            customer = {}
-                    except Exception as e:
-                        print(f"Error parsing customer JSON: {e}")
+                        customer = json.loads(customer) if customer else {}
+                    except:
                         customer = {}
-                
                 if isinstance(customer, list):
                     customer = customer[0] if customer else {}
-                
                 if not isinstance(customer, dict):
                     customer = {}
                 
-                customer_name = customer.get('name', '')
-                if not customer_name:
-                    customer_name = order.get('customer_name', '')
-                if not customer_name:
-                    customer_name = 'Customer'
-                
-                customer_email = customer.get('email', '')
-                if not customer_email:
-                    customer_email = order.get('customer_email', 'N/A')
-                if not customer_email:
-                    customer_email = 'N/A'
-                
-                customer_phone = customer.get('phone', '')
-                if not customer_phone:
-                    customer_phone = order.get('customer_phone', 'N/A')
-                if not customer_phone:
-                    customer_phone = 'N/A'
-                
-                customer_address = customer.get('address', '')
-                if not customer_address:
-                    customer_address = order.get('customer_address', 'N/A')
-                if not customer_address:
-                    customer_address = 'N/A'
-                
                 items = order.get('items', [])
-                formatted_items = []
-                
                 if isinstance(items, str):
                     try:
                         items = json.loads(items)
                     except:
                         items = []
-                
                 if not isinstance(items, list):
                     items = []
                 
+                formatted_items = []
                 for item in items:
-                    if not isinstance(item, dict):
-                        continue
-                    
-                    item_name = item.get('name', 'Product')
-                    item_quantity = item.get('quantity', 1)
-                    item_price = item.get('price', 0)
-                    item_total = item.get('total', 0)
-                    
-                    if item_total == 0 and item_price > 0 and item_quantity > 0:
-                        item_total = item_price * item_quantity
-                    
-                    formatted_items.append({
-                        'name': item_name,
-                        'quantity': item_quantity,
-                        'price': item_price,
-                        'total': item_total
-                    })
+                    if isinstance(item, dict):
+                        formatted_items.append({
+                            'name': item.get('name', 'Product'),
+                            'quantity': item.get('quantity', 1),
+                            'price': item.get('price', 0),
+                            'total': item.get('total', item.get('price', 0) * item.get('quantity', 1))
+                        })
                 
-                status = order.get('status', 'pending')
-                created_at = order.get('created_at', '')
-                total = order.get('total', 0)
-                if total == 0:
-                    for item in formatted_items:
-                        total += item.get('total', 0)
-                source = order.get('source', 'web')
-                
-                response_data = {
+                return jsonify({
                     'order_id': order.get('order_id', 'N/A'),
                     'customer': {
-                        'name': customer_name,
-                        'email': customer_email,
-                        'phone': customer_phone,
-                        'address': customer_address,
+                        'name': customer.get('name', order.get('customer_name', 'Customer')),
+                        'email': customer.get('email', order.get('customer_email', 'N/A')),
+                        'phone': customer.get('phone', order.get('customer_phone', 'N/A')),
+                        'address': customer.get('address', order.get('customer_address', 'N/A')),
                     },
                     'items': formatted_items,
                     'subtotal': order.get('subtotal', 0),
                     'shipping': order.get('shipping', 0),
-                    'total': total,
-                    'status': status,
-                    'created_at': created_at,
-                    'source': source,
-                }
-                
-                print(f"📦 Response data: {response_data}")
-                return jsonify(response_data)
-        
-        print(f"❌ Order not found: {order_id}")
+                    'total': order.get('total', 0),
+                    'status': order.get('status', 'pending'),
+                    'created_at': order.get('created_at', ''),
+                    'source': order.get('source', 'web'),
+                })
         return jsonify({'error': 'Order not found'}), 404
-        
     except Exception as e:
-        print(f"❌ Error fetching order: {e}")
-        traceback.print_exc()
-        return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
+        return jsonify({'error': str(e)}), 500
 
 
 @admin_bp.route('/admin/upload-image', methods=['POST'])
+@login_required
 def upload_image():
-    if not session.get('admin_logged_in'):
-        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
     if 'image' not in request.files:
         return jsonify({'success': False, 'message': 'No file uploaded'}), 400
     file = request.files['image']
@@ -1117,10 +1296,8 @@ def upload_image():
 
 
 @admin_bp.route('/admin/products', methods=['POST'])
+@admin_required
 def admin_products():
-    if not session.get('admin_logged_in'):
-        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
-
     try:
         if request.is_json:
             data = request.get_json()
@@ -1145,11 +1322,6 @@ def admin_products():
         if not product_id:
             return jsonify({'success': False, 'message': 'Product ID is required'}), 400
         
-        print("=" * 60)
-        print("📦 SAVING PRODUCT")
-        print(f"📋 Data received: {json.dumps(data, indent=2)}")
-        print("=" * 60)
-        
         existing_products = load_products()
         product_exists = False
         for p in existing_products:
@@ -1158,7 +1330,6 @@ def admin_products():
                 break
         
         if product_exists:
-            print(f"🔄 Updating product: {product_id}")
             response = requests.patch(
                 f"{Config.SUPABASE_URL}/rest/v1/products?id=eq.{product_id}",
                 headers=Config.SUPABASE_HEADERS,
@@ -1166,15 +1337,12 @@ def admin_products():
                 timeout=10,
             )
             if response.status_code in [200, 204]:
-                print(f"✅ Product updated: {product_id}")
                 import utils.data
                 utils.data.products_cache = []
                 return jsonify({'success': True, 'message': 'Product updated successfully!', 'product': data})
             else:
-                print(f"❌ Update error: {response.status_code} - {response.text}")
                 return jsonify({'success': False, 'message': f'Error updating product: {response.status_code}'}), 500
         
-        print(f"🆕 Creating product: {product_id}")
         response = requests.post(
             f"{Config.SUPABASE_URL}/rest/v1/products",
             headers=Config.SUPABASE_HEADERS,
@@ -1183,12 +1351,10 @@ def admin_products():
         )
         
         if response.status_code in [200, 201]:
-            print(f"✅ Product created: {product_id}")
             import utils.data
             utils.data.products_cache = []
             return jsonify({'success': True, 'message': 'Product saved successfully!', 'product': data})
         else:
-            print(f"❌ Create error: {response.status_code} - {response.text}")
             return jsonify({'success': False, 'message': f'Error saving product: {response.status_code} - {response.text}'}), 500
         
     except Exception as exc:
@@ -1198,9 +1364,8 @@ def admin_products():
 
 
 @admin_bp.route('/admin/products/<product_id>', methods=['DELETE'])
+@admin_required
 def admin_delete_product(product_id):
-    if not session.get('admin_logged_in'):
-        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
     try:
         response = requests.delete(
             f"{Config.SUPABASE_URL}/rest/v1/products?id=eq.{product_id}",
@@ -1217,9 +1382,8 @@ def admin_delete_product(product_id):
 
 
 @admin_bp.route('/admin/orders/<order_id>/status', methods=['POST'])
+@admin_required
 def admin_update_order_status(order_id):
-    if not session.get('admin_logged_in'):
-        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
     try:
         new_status = request.json.get('status')
         if not new_status:
@@ -1240,13 +1404,11 @@ def admin_update_order_status(order_id):
 # ============================================================
 # API CUSTOMERS ENDPOINT
 # ============================================================
+
 @admin_bp.route('/api/customers', methods=['GET'])
+@login_required
 def api_customers():
-    if not session.get('admin_logged_in'):
-        return jsonify({'error': 'Unauthorized'}), 401
-    
     try:
-        # First try to get from customers table
         response = requests.get(
             f"{Config.SUPABASE_URL}/rest/v1/customers",
             headers=Config.SUPABASE_HEADERS,
@@ -1267,7 +1429,6 @@ def api_customers():
                     })
                 return jsonify(result)
         
-        # Fallback: Build from orders
         orders = load_orders()
         customer_dict = {}
         
@@ -1314,11 +1475,10 @@ def api_customers():
 # ============================================================
 # SALES STATS ENDPOINT
 # ============================================================
+
 @admin_bp.route('/admin/api/sales-stats', methods=['GET'])
+@login_required
 def api_sales_stats():
-    if not session.get('admin_logged_in'):
-        return jsonify({'error': 'Unauthorized'}), 401
-    
     try:
         orders = load_orders()
         today = datetime.utcnow().date()
@@ -1402,18 +1562,12 @@ def api_sales_stats():
 # ============================================================
 # PROCESS RETURN ENDPOINT
 # ============================================================
+
 @admin_bp.route('/admin/api/process-return', methods=['POST'])
+@login_required
 def api_process_return():
-    if not session.get('admin_logged_in'):
-        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
-    
     try:
         data = request.get_json()
-        
-        print("=" * 60)
-        print("🔍 RETURN REQUEST RECEIVED")
-        print(f"📋 Data: {data}")
-        print("=" * 60)
         
         if not data:
             return jsonify({'success': False, 'message': 'No data provided'}), 400
@@ -1464,9 +1618,6 @@ def api_process_return():
             'return_amount': refund_total
         }
         
-        print(f"📦 Saving return order: {return_order_id}")
-        print(f"📦 Total: -KSh {refund_total} (negative = revenue deduction)")
-        
         response = requests.post(
             f"{Config.SUPABASE_URL}/rest/v1/orders",
             headers=Config.SUPABASE_HEADERS,
@@ -1475,8 +1626,6 @@ def api_process_return():
         )
         
         if response.status_code in [200, 201]:
-            print(f"✅ Return order saved: {return_order_id}")
-            
             for item in items_to_return:
                 product_id = str(item.get('id', ''))
                 quantity = int(item.get('quantity', 1))
@@ -1487,7 +1636,6 @@ def api_process_return():
                             if str(p.get('id')) == product_id:
                                 current_stock = int(p.get('stock', 0))
                                 new_stock = current_stock + quantity
-                                print(f"🔄 Restocking {p.get('name')}: {current_stock} → {new_stock}")
                                 update_product_stock(product_id, new_stock)
                                 break
                     except Exception as e:
@@ -1504,7 +1652,6 @@ def api_process_return():
                 'revenue_deducted': refund_total
             })
         else:
-            print(f"❌ Failed to save return: {response.status_code} - {response.text}")
             return jsonify({
                 'success': False,
                 'message': f'Failed to process return: {response.status_code}'
@@ -1514,168 +1661,3 @@ def api_process_return():
         print(f'❌ Return error: {e}')
         traceback.print_exc()
         return jsonify({'success': False, 'message': str(e)}), 500
-
-
-# ============================================================
-# DEBUG ENDPOINTS
-# ============================================================
-@admin_bp.route('/admin/debug-customers', methods=['GET'])
-def debug_customers():
-    if not session.get('admin_logged_in'):
-        return jsonify({'error': 'Unauthorized'}), 401
-    
-    try:
-        orders = load_orders()
-        customer_dict = {}
-        
-        for order in orders:
-            name = None
-            
-            if order.get('customer_name'):
-                name = order.get('customer_name')
-            
-            if not name:
-                customer = order.get('customer', {})
-                if isinstance(customer, dict):
-                    name = customer.get('name')
-                elif isinstance(customer, str):
-                    try:
-                        customer_obj = json.loads(customer)
-                        name = customer_obj.get('name')
-                    except:
-                        pass
-            
-            if not name or name in ['Walk-in Customer', 'Web Customer', 'Customer', '']:
-                continue
-            
-            if name not in customer_dict:
-                customer_dict[name] = {
-                    'name': name,
-                    'orders': 0,
-                    'total_spent': 0
-                }
-            customer_dict[name]['orders'] += 1
-            customer_dict[name]['total_spent'] += order.get('total', 0)
-        
-        return jsonify({
-            'success': True,
-            'total_customers': len(customer_dict),
-            'customers': list(customer_dict.values()),
-            'raw_orders_count': len(orders)
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@admin_bp.route('/admin/debug-products', methods=['GET'])
-def debug_products():
-    if not session.get('admin_logged_in'):
-        return jsonify({'error': 'Unauthorized'}), 401
-    
-    products = load_products()
-    categories = {}
-    for p in products:
-        cat = p.get('category', 'Uncategorized')
-        categories[cat] = categories.get(cat, 0) + 1
-    
-    return jsonify({
-        'total': len(products),
-        'categories': categories,
-        'first_product': products[0] if products else None
-    })
-
-
-@admin_bp.route('/admin/debug-orders', methods=['GET'])
-def debug_orders():
-    if not session.get('admin_logged_in'):
-        return jsonify({'error': 'Unauthorized'}), 401
-    
-    try:
-        response = requests.get(
-            f"{Config.SUPABASE_URL}/rest/v1/orders?select=*&order=created_at.desc&limit=20",
-            headers=Config.SUPABASE_HEADERS,
-            timeout=10,
-        )
-        
-        if response.status_code == 200:
-            orders = response.json()
-            return jsonify({
-                'success': True,
-                'count': len(orders),
-                'orders': orders,
-                'sample': orders[0] if orders else None
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'status_code': response.status_code,
-                'error': response.text
-            }), 500
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e),
-            'traceback': traceback.format_exc()
-        }), 500
-
-
-@admin_bp.route('/admin/debug-db', methods=['GET'])
-def debug_db():
-    if not session.get('admin_logged_in'):
-        return jsonify({'error': 'Unauthorized'}), 401
-    
-    try:
-        response = requests.get(
-            f"{Config.SUPABASE_URL}/rest/v1/orders?select=*&order=created_at.desc&limit=5",
-            headers=Config.SUPABASE_HEADERS,
-            timeout=10,
-        )
-        
-        if response.status_code == 200:
-            orders = response.json()
-            
-            result = []
-            for order in orders:
-                result.append({
-                    'order_id': order.get('order_id'),
-                    'customer_name': order.get('customer_name'),
-                    'customer': order.get('customer'),
-                    'customer_email': order.get('customer_email'),
-                    'customer_phone': order.get('customer_phone'),
-                    'source': order.get('source'),
-                    'created_at': order.get('created_at')
-                })
-            
-            return jsonify({
-                'success': True,
-                'total_orders': len(orders),
-                'orders': result
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': f'Status: {response.status_code}',
-                'text': response.text
-            })
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@admin_bp.route('/admin/test-return', methods=['GET'])
-def test_return():
-    if not session.get('admin_logged_in'):
-        return jsonify({'error': 'Unauthorized'}), 401
-    
-    return jsonify({
-        'success': True,
-        'message': 'Return endpoint is working!',
-        'test_data': {
-            'items': [
-                {'id': 'prod_001', 'name': 'Test Product 1', 'price': 1000, 'quantity': 1},
-                {'id': 'prod_002', 'name': 'Test Product 2', 'price': 2000, 'quantity': 2}
-            ],
-            'refund_total': 5000,
-            'customer_name': 'Test Customer',
-            'reason': 'Test return'
-        }
-    })
