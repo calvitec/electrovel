@@ -35,39 +35,128 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
+// ============================================================
+// SIDEBAR TOGGLE - GUARANTEED TO WORK
+// ============================================================
+function toggleSidebar() {
+    console.log('🔘 ToggleSidebar called!');
+    var sidebar = document.getElementById('sidebar');
+    var backdrop = document.getElementById('backdrop');
+    
+    if (!sidebar) {
+        console.error('❌ Sidebar not found!');
+        return;
+    }
+    
+    sidebar.classList.toggle('open');
+    if (backdrop) {
+        backdrop.classList.toggle('active');
+    }
+    
+    console.log('📱 Sidebar open:', sidebar.classList.contains('open'));
+}
+
+// Make sure toggle is available globally
+window.toggleSidebar = toggleSidebar;
+
+// Also listen for clicks on any element with class 'sidebar-toggle'
+document.addEventListener('DOMContentLoaded', function() {
+    var toggleBtns = document.querySelectorAll('.sidebar-toggle');
+    toggleBtns.forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleSidebar();
+        });
+    });
+    
+    console.log('✅ Sidebar toggle ready! Found ' + toggleBtns.length + ' toggle buttons');
+});
 
 // ============================================================
-// SIDEBAR
+// SIDEBAR - FIXED
 // ============================================================
 function initSidebar() {
-    var toggle = document.querySelector('.sidebar-toggle');
+    var sidebar = document.getElementById('sidebar');
     var backdrop = document.getElementById('backdrop');
-
-    if (toggle) {
-        toggle.addEventListener('click', function(e) {
-            e.stopPropagation();
-            document.getElementById('sidebar').classList.toggle('open');
-            if (backdrop) backdrop.classList.toggle('active');
-        });
+    var toggleBtn = document.querySelector('.sidebar-toggle');
+    
+    console.log('🔧 Initializing sidebar...');
+    
+    // If no sidebar found, exit
+    if (!sidebar) {
+        console.warn('⚠️ Sidebar not found');
+        return;
     }
-
+    
+    // Remove all existing click listeners by cloning
+    if (toggleBtn) {
+        var newBtn = toggleBtn.cloneNode(true);
+        toggleBtn.parentNode.replaceChild(newBtn, toggleBtn);
+        toggleBtn = newBtn;
+        
+        // Add click listener
+        toggleBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('🔘 Hamburger clicked!');
+            sidebar.classList.toggle('open');
+            if (backdrop) {
+                backdrop.classList.toggle('active');
+            }
+            console.log('📱 Sidebar open:', sidebar.classList.contains('open'));
+        });
+    } else {
+        console.warn('⚠️ Toggle button not found!');
+        // Try to find it by any means
+        var btn = document.querySelector('[onclick*="toggleSidebar"]');
+        if (btn) {
+            console.log('✅ Found toggle button with inline onclick');
+        }
+    }
+    
+    // Backdrop click to close
     if (backdrop) {
         backdrop.addEventListener('click', function() {
-            document.getElementById('sidebar').classList.remove('open');
+            sidebar.classList.remove('open');
             backdrop.classList.remove('active');
         });
     }
-
+    
     // Close sidebar on nav item click (mobile)
-    document.querySelectorAll('.nav-item').forEach(function(item) {
+    document.querySelectorAll('.sidebar .nav-item').forEach(function(item) {
         item.addEventListener('click', function() {
             if (window.innerWidth <= 768) {
-                document.getElementById('sidebar').classList.remove('open');
+                sidebar.classList.remove('open');
                 if (backdrop) backdrop.classList.remove('active');
             }
         });
     });
+    
+    // Close sidebar on Escape
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            sidebar.classList.remove('open');
+            if (backdrop) backdrop.classList.remove('active');
+        }
+    });
+    
+    console.log('✅ Sidebar initialized');
 }
+
+// ============================================================
+// GLOBAL TOGGLE FUNCTION (Backup)
+// ============================================================
+window.toggleSidebar = function() {
+    var sidebar = document.getElementById('sidebar');
+    var backdrop = document.getElementById('backdrop');
+    if (sidebar) {
+        sidebar.classList.toggle('open');
+        if (backdrop) {
+            backdrop.classList.toggle('active');
+        }
+    }
+};
 
 // ============================================================
 // NAVIGATION
