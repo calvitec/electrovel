@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, send_from_directory
 from datetime import datetime
 import os
 import traceback
@@ -15,11 +15,28 @@ app.config.from_object(Config)
 app.secret_key = Config.SECRET_KEY
 app.permanent_session_lifetime = Config.PERMANENT_SESSION_LIFETIME
 app.template_folder = 'templates'
-app.static_folder = Config.STATIC_FOLDER
 
+# ===== STATIC FOLDER CONFIGURATION - FIXED =====
+# Use absolute path for static folder
+STATIC_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
+app.static_folder = STATIC_FOLDER
+app.static_url_path = '/static'
+
+# Also set in config for other parts
+Config.STATIC_FOLDER = STATIC_FOLDER
+
+# Create upload folder
 os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
 
+# ===== VERCELL STATIC FILE SERVING =====
+# If on Vercel, ensure static files are served correctly
+if Config.IS_VERCEL:
+    @app.route('/static/<path:filename>')
+    def serve_static(filename):
+        """Serve static files on Vercel"""
+        return send_from_directory(app.static_folder, filename)
 
+# ===== TEMPLATE FILTERS =====
 @app.template_filter('format_number')
 def format_number_filter(value):
     try:
@@ -29,13 +46,12 @@ def format_number_filter(value):
     except (ValueError, TypeError):
         return '0'
 
-
+# ===== ERROR HANDLERS =====
 @app.errorhandler(404)
 def not_found(error):
     if request.path.startswith('/admin/') or request.path.startswith('/api/'):
         return jsonify({'error': 'Not found', 'message': 'The requested endpoint does not exist'}), 404
     return render_template('404.html'), 404
-
 
 @app.errorhandler(500)
 def server_error(error):
@@ -45,12 +61,12 @@ def server_error(error):
         return jsonify({'error': 'Server error', 'message': str(error)}), 500
     return render_template('500.html'), 500
 
-
+# ===== REGISTER BLUEPRINTS =====
 app.register_blueprint(shop_bp)
 app.register_blueprint(api_bp)
 app.register_blueprint(admin_bp)
 
-
+# ===== BEFORE REQUEST =====
 @app.before_request
 def maybe_sync_pending_orders():
     if request.path.startswith('/static/') or request.path.startswith('/favicon.ico'):
@@ -58,11 +74,10 @@ def maybe_sync_pending_orders():
     sync_pending_data_if_possible()
     return None
 
-
+# ===== ROUTES =====
 @app.route('/health')
 def health():
     return jsonify({'status': 'ok', 'message': 'Server is running', 'timestamp': datetime.utcnow().isoformat()})
-
 
 @app.route('/debug')
 def debug():
@@ -77,10 +92,11 @@ def debug():
             'sample_order': orders[0] if orders else None,
             'sample_product': products[0] if products else None,
             'is_vercel': Config.IS_VERCEL,
+            'static_folder': app.static_folder,
+            'template_folder': app.template_folder,
         })
     except Exception as exc:
         return jsonify({'error': str(exc)})
-
 
 @app.route('/load-sample-data', methods=['GET', 'POST'])
 def load_sample_data():
@@ -249,12 +265,30 @@ def load_sample_data():
     except Exception as exc:
         return jsonify({'success': False, 'error': str(exc)}), 500
 
+# ===== STATIC FILE CHECK ROUTE =====
+@app.route('/static-check')
+def static_check():
+    """Debug route to check if static files are accessible"""
+    static_path = app.static_folder
+    css_path = os.path.join(static_path, 'css', 'admin.css')
+    js_path = os.path.join(static_path, 'js', 'admin.js')
+    
+    return jsonify({
+        'static_folder': static_path,
+        'static_exists': os.path.exists(static_path),
+        'css_exists': os.path.exists(css_path),
+        'js_exists': os.path.exists(js_path),
+        'is_vercel': Config.IS_VERCEL,
+        'static_url_path': app.static_url_path,
+    })
 
 if __name__ == '__main__':
     print('\n' + '=' * 60)
     print('📱 PRICE POINT - Premium Electronics Shop')
     print('=' * 60)
     print(f"🌍 Environment: {'Vercel' if Config.IS_VERCEL else 'Local'}")
+    print(f"📁 Static folder: {app.static_folder}")
+    print(f"📁 Template folder: {app.template_folder}")
     print(f"\n📊 Products: {len(load_products())}")
     print(f"📊 Orders: {len(load_orders())}")
     print('=' * 60)
