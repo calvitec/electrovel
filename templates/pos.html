@@ -4,9 +4,47 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes" />
     <title>POS Pro · Point of Sale</title>
+    
+    <!-- ===== PWA META TAGS ===== -->
+    <link rel="manifest" href="/manifest.json" crossorigin="use-credentials">
+    <meta name="theme-color" content="#059669">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    
+    <!-- ===== SERVICE WORKER REGISTRATION ===== -->
+    <script>
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+            .then(reg => {
+                console.log('✅ Service Worker registered successfully!', reg);
+                
+                // Handle updates
+                reg.addEventListener('updatefound', () => {
+                    const newWorker = reg.installing;
+                    newWorker.addEventListener('statechange', () => {
+                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                            console.log('🔄 New update available!');
+                            // Optional: Show update notification
+                            if (confirm('New version available! Refresh to update?')) {
+                                window.location.reload();
+                            }
+                        }
+                    });
+                });
+            })
+            .catch(err => {
+                console.error('❌ Service Worker registration failed:', err);
+            });
+    });
+}
+</script>
+    
     <style>
         * { font-family: 'Inter', sans-serif; margin: 0; padding: 0; box-sizing: border-box; }
         body { background: #f0f2f5; color: #0f172a; min-height: 100vh; }
@@ -988,32 +1026,32 @@
             });
         }
 
-     function checkUnsyncedOrders() {
-    fetch('/admin/api/unsynced-count')
-        .then(r => r.json())
-        .then(data => {
-            if (data.success) {
-                const statusEl = document.getElementById('syncStatus');
-                const countEl = document.getElementById('unsyncedCount');
-                
-                if (statusEl) {
-                    // Only show if there are ACTUAL unsynced orders
-                    if (data.count > 0) {
-                        statusEl.style.display = 'inline-flex';
-                        statusEl.className = '';
-                        if (countEl) countEl.textContent = data.count;
+        function checkUnsyncedOrders() {
+            fetch('/admin/api/unsynced-count')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        const statusEl = document.getElementById('syncStatus');
+                        const countEl = document.getElementById('unsyncedCount');
                         
-                        let orderIds = data.orders || [];
-                        let tooltip = orderIds.length > 0 ? 'Orders: ' + orderIds.join(', ') : '';
-                        statusEl.title = tooltip;
-                    } else {
-                        statusEl.style.display = 'none';
+                        if (statusEl) {
+                            // Only show if there are ACTUAL unsynced orders
+                            if (data.count > 0) {
+                                statusEl.style.display = 'inline-flex';
+                                statusEl.className = '';
+                                if (countEl) countEl.textContent = data.count;
+                                
+                                let orderIds = data.orders || [];
+                                let tooltip = orderIds.length > 0 ? 'Orders: ' + orderIds.join(', ') : '';
+                                statusEl.title = tooltip;
+                            } else {
+                                statusEl.style.display = 'none';
+                            }
+                        }
                     }
-                }
-            }
-        })
-        .catch(err => console.error('Error checking sync status:', err));
-}
+                })
+                .catch(err => console.error('Error checking sync status:', err));
+        }
 
         function manualSync() {
             syncOfflineOrders();
